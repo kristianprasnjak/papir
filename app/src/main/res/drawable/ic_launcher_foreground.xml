@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bijeli list papira s preklopljenim kutom i tri retka teksta -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,32 L62,32 L72,42 L72,76 L38,76 Z" />
+    <path
+        android:fillColor="#C8C8C8"
+        android:pathData="M62,32 L62,42 L72,42 Z" />
+    <path
+        android:fillColor="#2B2B2B"
+        android:pathData="M43,50 h22 v2.5 h-22 Z M43,57 h22 v2.5 h-22 Z M43,64 h14 v2.5 h-14 Z" />
+</vector>
