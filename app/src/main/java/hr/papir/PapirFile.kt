@@ -65,6 +65,13 @@ object PapirFile {
         return LineEnding.CRLF
     }
 
+    /**
+     * Ime novog papira u mapi: datum i vrijeme nastanka, da se u upravitelju datoteka
+     * slaže po redu. Korisnik ga može preimenovati u bilo što.
+     */
+    fun newPaperName(t: java.time.LocalDateTime): String =
+        t.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH.mm")) + ".txt"
+
     /** Prijedlog imena za „Spremi kao": prvi redak, bez znakova koje sustavi ne dopuštaju. */
     fun suggestName(text: String): String {
         val firstLine = text.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
