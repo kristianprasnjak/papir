@@ -63,7 +63,7 @@ Vrste:
 | 0 | Ključ | sistemska | redak na kraju s verzijom formata | OTVORENO |
 | 1 | Skrivanje | živa | početna oznaka s razinom; cjelina traje do sljedeće oznake iste ili niže razine; podrazine | OTVORENO: znak |
 | 2 | Kvačica | živa | `[ ]` / `[x]` | prijedlog |
-| 3 | Datum i vrijeme | unos | običan tekst | prijedlog |
+| 3 | Datum i vrijeme | unos | običan tekst, fiksne širine: `09:05 14.10.2026.` | u aplikaciji od 0.2 (ne dira format) |
 | 4 | Slika | živa | blok omeđen znakom `♠` (U+2660), razmaci čuvaju mjesto, u sredini ime slike | OTVORENO: točan uzorak |
 | 5 | 2D raspored | živa | kutije na mreži znakova; otok u papiru ili cijela bilješka | OTVORENO |
 | 6 | Tablica | živa | stupci poravnati razmacima; samo drži, nikad ne računa | OTVORENO |

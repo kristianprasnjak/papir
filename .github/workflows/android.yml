@@ -27,13 +27,34 @@ jobs:
           gradle-version: "8.11.1"
 
       - name: Testovi
-        run: gradle testDebugUnitTest --no-daemon
+        run: |
+          set -o pipefail
+          gradle testDebugUnitTest --no-daemon 2>&1 | tee -a gradle.log
 
       - name: Izgradnja APK-a
-        run: gradle assembleDebug --no-daemon
+        run: |
+          set -o pipefail
+          gradle assembleDebug --no-daemon 2>&1 | tee -a gradle.log
+
+      # Greške kompajlera i testova kao bilješke, vidljive u pull requestu i preko API-ja.
+      - name: Greške
+        if: failure()
+        run: |
+          grep -E '^e: ' gradle.log | head -8 | sed 's/^/::error::/' || true
+          python3 - <<'EOF'
+          import glob, xml.etree.ElementTree as ET
+          for f in glob.glob("app/build/test-results/**/*.xml", recursive=True):
+              for case in ET.parse(f).iter("testcase"):
+                  for fail in list(case.iter("failure")) + list(case.iter("error")):
+                      msg = (fail.get("message") or fail.text or "").replace("\n", " ")[:300]
+                      print(f"::error::{case.get('classname')}.{case.get('name')}: {msg}")
+          EOF
+          grep -A4 'What went wrong' gradle.log | head -6 | tr '\n' ' ' | sed 's/^/::error::/'
 
       - name: Priprema
-        run: cp app/build/outputs/apk/debug/app-debug.apk papir.apk
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk papir.apk
+          echo "VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -44,8 +65,8 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.0-build${{ github.run_number }}
-          name: Papir 0.1.0 (build ${{ github.run_number }})
+          tag_name: v${{ env.VERSION }}-build${{ github.run_number }}
+          name: Papir ${{ env.VERSION }} (build ${{ github.run_number }})
           prerelease: true
           files: papir.apk
           body: |

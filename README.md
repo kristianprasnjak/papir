@@ -4,6 +4,12 @@ Prazan papir za mobitel. Otvoriš, pišeš, zatvoriš.
 
 Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zauvijek otvara u bilo kojem programu za tekst, uključujući stari Windows Notepad. Format je otvoren i opisan u [SPEC.md](SPEC.md).
 
+## Verzija 0.2
+
+- gumb **+** u traci iznad tipkovnice otvara popis funkcija; dodir na funkciju je umeće
+- prva funkcija: **Datum i vrijeme**, upisuje npr. `09:05 14.10.2026.` na mjesto kursora (ili umjesto odabranog teksta), kao F5 u Notepadu
+- nacrt se otvara s kursorom na kraju teksta, datoteka s kursorom na početku
+
 ## Verzija 0.1
 
 Samo papir, bez funkcija:
