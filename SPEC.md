@@ -70,7 +70,9 @@ Vrste:
 | 7 | Poveznica | živa | oznaka + cilj (druga bilješka ili web adresa) | OTVORENO |
 
 Pravila za sve funkcije:
-- Oznaku upisuje samo aplikacija, preko izbornika. Isti znak napisan rukom u tekstu ostaje običan znak.
+- Aplikacija ne zna tko je što upisao. Funkcija se prepoznaje isključivo po točnom uzorku u tekstu: tko god ga upiše, kroz izbornik ili rukom, dobije funkciju.
+- Uzorak mora biti dovoljno neobičan da se nikad ne pojavi slučajno (npr. `$%&(//ODLIČNO//)&%$`). Jedan običan znak, poput `♠`, sam za sebe nije uzorak.
+- Jedan znak manje i uzorak se raspada: aplikacija prikazuje znakove kao običan tekst.
 - Oznake moraju biti vidljive u Notepadu. Nevidljivi znakovi (npr. širine nula) nisu dopušteni.
 - Oznaka bi trebala biti nešto što bi čovjek mogao i ručno napisati.
 
