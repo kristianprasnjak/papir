@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,13 +22,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,12 +52,17 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
 
@@ -71,6 +80,11 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
+    override fun onStart() {
+        super.onStart()
+        vm.checkExternal()
+    }
+
     override fun onStop() {
         super.onStop()
         vm.saveNow()
@@ -85,15 +99,20 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Traka iznad tipkovnice: jedan dodir otvara popis funkcija, drugi umeće funkciju (SPEC.md, ustav 4).
+ * Traka iznad tipkovnice, na dohvat palca: lijevo poništi i ponovi, desno funkcije.
+ * Jedan dodir otvara popis funkcija, drugi umeće funkciju (SPEC.md, ustav 4).
  *
  * Popis je dio rasporeda, a ne skočni prozor, pa ga tipkovnica ne može prekriti
  * i ne oduzima fokus papiru (tipkovnica ostaje otvorena).
  */
 @Composable
-private fun FunctionBar(
+private fun BottomBar(
     open: Boolean,
     enabled: Boolean,
+    canUndo: Boolean,
+    canRedo: Boolean,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
     onToggle: () -> Unit,
     onDateTime: () -> Unit,
 ) {
@@ -105,18 +124,25 @@ private fun FunctionBar(
             Modifier
                 .fillMaxWidth()
                 .height(48.dp)
-                .padding(end = 8.dp),
-            horizontalArrangement = Arrangement.End,
+                .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(
-                onClick = onToggle,
-                enabled = enabled,
-                modifier = Modifier.semantics { contentDescription = if (open) "Zatvori funkcije" else "Funkcije" },
-            ) {
-                Text(if (open) "×" else "+", fontSize = 24.sp)
-            }
+            BarButton("↶", "Poništi", enabled && canUndo, onUndo)
+            BarButton("↷", "Ponovi", enabled && canRedo, onRedo)
+            Spacer(Modifier.weight(1f))
+            BarButton(if (open) "×" else "+", if (open) "Zatvori funkcije" else "Funkcije", enabled, onToggle)
         }
+    }
+}
+
+@Composable
+private fun BarButton(symbol: String, description: String, enabled: Boolean, onClick: () -> Unit) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.semantics { contentDescription = description },
+    ) {
+        Text(symbol, fontSize = 22.sp)
     }
 }
 
@@ -135,6 +161,23 @@ private fun FunctionItem(label: String, onClick: () -> Unit) {
     }
 }
 
+/** Sukob: datoteka je promijenjena izvana dok su ovdje bile nespremljene izmjene. Odlučuje čovjek. */
+@Composable
+private fun ConflictBar(onKeepMine: () -> Unit, onLoadTheirs: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
+        Text(
+            "Datoteka je u međuvremenu promijenjena izvan Papira. Ništa nije prepisano. " +
+                "Koju verziju zadržati? Druga ostaje u Prethodnim verzijama.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onLoadTheirs) { Text("Onu izvana") }
+            TextButton(onClick = onKeepMine) { Text("Ovu ovdje") }
+        }
+    }
+}
+
 @Composable
 private fun PapirTheme(content: @Composable () -> Unit) {
     val colors = if (isSystemInDarkTheme()) {
@@ -145,15 +188,24 @@ private fun PapirTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = colors, content = content)
 }
 
+private val VERSION_TIME = DateTimeFormatter.ofPattern("dd.MM.yyyy. HH:mm")
+
+private fun versionTime(millis: Long): String =
+    Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(VERSION_TIME)
+
 @Composable
 private fun PapirScreen(vm: PapirViewModel) {
     var menuOpen by remember { mutableStateOf(false) }
     var functionsOpen by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf<TextFieldValue?>(null) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
 
     val openDoc = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) vm.open(uri, fromPicker = true)
+    }
+    val chooseFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) vm.setFolder(uri)
     }
     // application/octet-stream: sustav ne dodaje svoj nastavak, ime ostaje slovo za slovo.
     val createDoc = rememberLauncherForActivityResult(
@@ -202,16 +254,32 @@ private fun PapirScreen(vm: PapirViewModel) {
                     .padding(start = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = vm.title.orEmpty(),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                val title = vm.title
+                if (title == null && !vm.hasFolder && vm.loaded) {
+                    // Jednom u životu: gdje žive papiri. Do tada se piše u nacrt.
+                    Text(
+                        text = "Odaberi mapu za papire",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { chooseFolder.launch(null) },
+                    )
+                } else {
+                    Text(
+                        text = title.orEmpty(),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
                 Box {
-                    IconButton(onClick = { menuOpen = true }) {
+                    IconButton(
+                        onClick = { menuOpen = true },
+                        modifier = Modifier.semantics { contentDescription = "Izbornik" },
+                    ) {
                         Text("⋯", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -224,12 +292,35 @@ private fun PapirScreen(vm: PapirViewModel) {
                             onClick = { menuOpen = false; request(Pending.OPEN) },
                         )
                         DropdownMenuItem(
+                            text = { Text("Preimenuj…") },
+                            enabled = vm.canRename,
+                            onClick = {
+                                menuOpen = false
+                                val name = vm.title.orEmpty()
+                                val dot = name.lastIndexOf('.')
+                                // Odabrano je ime bez nastavka, ali i nastavak se smije mijenjati.
+                                renaming = TextFieldValue(name, TextRange(0, if (dot > 0) dot else name.length))
+                            },
+                        )
+                        DropdownMenuItem(
                             text = { Text("Spremi kao…") },
                             enabled = !vm.notText,
                             onClick = { menuOpen = false; createDoc.launch(vm.suggestedName()) },
                         )
+                        DropdownMenuItem(
+                            text = { Text("Prethodne verzije…") },
+                            onClick = { menuOpen = false; vm.showVersions() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (vm.hasFolder) "Mapa za papire…" else "Odaberi mapu za papire…") },
+                            onClick = { menuOpen = false; chooseFolder.launch(null) },
+                        )
                     }
                 }
+            }
+
+            if (vm.conflict) {
+                ConflictBar(onKeepMine = vm::keepMine, onLoadTheirs = vm::loadTheirs)
             }
 
             vm.message?.let { msg ->
@@ -267,9 +358,13 @@ private fun PapirScreen(vm: PapirViewModel) {
                     .focusRequester(focus),
             )
 
-            FunctionBar(
+            BottomBar(
                 open = functionsOpen && !vm.readOnly,
                 enabled = !vm.readOnly,
+                canUndo = vm.canUndo,
+                canRedo = vm.canRedo,
+                onUndo = vm::undo,
+                onRedo = vm::redo,
                 onToggle = { functionsOpen = !functionsOpen },
                 onDateTime = { functionsOpen = false; vm.insertDateTime() },
             )
@@ -280,7 +375,9 @@ private fun PapirScreen(vm: PapirViewModel) {
         AlertDialog(
             onDismissRequest = { vm.pending = null },
             title = { Text("Spremiti ovaj papir?") },
-            text = { Text("Papir još nije spremljen kao datoteka.") },
+            text = {
+                Text("Papir još nije datoteka. Ako ga ne spremiš, ostaje u Prethodnim verzijama.")
+            },
             confirmButton = {
                 TextButton(onClick = { createDoc.launch(vm.suggestedName()) }) { Text("Spremi kao…") }
             },
@@ -297,6 +394,80 @@ private fun PapirScreen(vm: PapirViewModel) {
                         }
                     }) { Text("Ne spremaj") }
                 }
+            },
+        )
+    }
+
+    renaming?.let { value ->
+        val nameFocus = remember { FocusRequester() }
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("Preimenuj") },
+            text = {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { renaming = it },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.None,
+                        autoCorrectEnabled = false,
+                    ),
+                    modifier = Modifier.focusRequester(nameFocus),
+                )
+                LaunchedEffect(Unit) { nameFocus.requestFocus() }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    renaming = null
+                    vm.rename(value.text)
+                }) { Text("Preimenuj") }
+            },
+            dismissButton = {
+                TextButton(onClick = { renaming = null }) { Text("Odustani") }
+            },
+        )
+    }
+
+    vm.versions?.let { list ->
+        AlertDialog(
+            onDismissRequest = { vm.versions = null },
+            title = { Text("Prethodne verzije") },
+            text = {
+                if (list.isEmpty()) {
+                    Text("Još nema spremljenih verzija ovog papira.")
+                } else {
+                    Column(
+                        Modifier
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        Text(
+                            "Dodir vraća verziju. Trenutni tekst pritom ide u ovaj popis, a vraćanje se može poništiti.",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                        list.forEach { v ->
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .clickable { vm.restore(v) }
+                                    .padding(vertical = 8.dp),
+                            ) {
+                                Text(versionTime(v.vrijeme), style = MaterialTheme.typography.labelLarge)
+                                Text(
+                                    v.pregled.ifEmpty { "(prazni retci)" },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.versions = null }) { Text("Zatvori") }
             },
         )
     }
