@@ -10,12 +10,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -44,6 +46,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -80,6 +84,57 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Traka iznad tipkovnice: jedan dodir otvara popis funkcija, drugi umeće funkciju (SPEC.md, ustav 4).
+ *
+ * Popis je dio rasporeda, a ne skočni prozor, pa ga tipkovnica ne može prekriti
+ * i ne oduzima fokus papiru (tipkovnica ostaje otvorena).
+ */
+@Composable
+private fun FunctionBar(
+    open: Boolean,
+    enabled: Boolean,
+    onToggle: () -> Unit,
+    onDateTime: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        if (open) {
+            FunctionItem("Datum i vrijeme", onDateTime)
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .padding(end = 8.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(
+                onClick = onToggle,
+                enabled = enabled,
+                modifier = Modifier.semantics { contentDescription = if (open) "Zatvori funkcije" else "Funkcije" },
+            ) {
+                Text(if (open) "×" else "+", fontSize = 24.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FunctionItem(label: String, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
 @Composable
 private fun PapirTheme(content: @Composable () -> Unit) {
     val colors = if (isSystemInDarkTheme()) {
@@ -93,6 +148,7 @@ private fun PapirTheme(content: @Composable () -> Unit) {
 @Composable
 private fun PapirScreen(vm: PapirViewModel) {
     var menuOpen by remember { mutableStateOf(false) }
+    var functionsOpen by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
 
@@ -189,8 +245,8 @@ private fun PapirScreen(vm: PapirViewModel) {
             }
 
             BasicTextField(
-                value = vm.text,
-                onValueChange = vm::onTextChange,
+                value = vm.field,
+                onValueChange = vm::onFieldChange,
                 readOnly = vm.readOnly,
                 textStyle = TextStyle(
                     fontFamily = FontFamily.Monospace,
@@ -205,9 +261,17 @@ private fun PapirScreen(vm: PapirViewModel) {
                     autoCorrectEnabled = false,
                 ),
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .weight(1f)
                     .padding(horizontal = 20.dp, vertical = 8.dp)
                     .focusRequester(focus),
+            )
+
+            FunctionBar(
+                open = functionsOpen && !vm.readOnly,
+                enabled = !vm.readOnly,
+                onToggle = { functionsOpen = !functionsOpen },
+                onDateTime = { functionsOpen = false; vm.insertDateTime() },
             )
         }
     }

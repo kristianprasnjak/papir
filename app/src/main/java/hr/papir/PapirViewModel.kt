@@ -11,6 +11,8 @@ import android.util.AtomicFile
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.lifecycle.AndroidViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +24,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.time.LocalDateTime
 
 /**
  * Operacije nad datotekama žive izvan životnog vijeka ekrana, da se spremanje
@@ -40,9 +43,11 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("papir", Context.MODE_PRIVATE)
     private val draft = AtomicFile(File(app.filesDir, "papir.txt"))
 
-    /** Tekst kakav se uređuje (krajevi redaka su uvijek \n). */
-    var text by mutableStateOf("")
+    /** Tekst kakav se uređuje (krajevi redaka su uvijek \n), zajedno s kursorom i odabirom. */
+    var field by mutableStateOf(TextFieldValue(""))
         private set
+
+    val text: String get() = field.text
 
     /** Ime datoteke; null znači nacrt koji još nije spremljen kao datoteka. */
     var title by mutableStateOf<String?>(null)
@@ -81,15 +86,29 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- Pisanje ---
 
-    fun onTextChange(new: String) {
-        if (readOnly || new == text) return
-        text = new
+    fun onFieldChange(new: TextFieldValue) {
+        val changed = new.text != field.text
+        if (changed && readOnly) return
+        field = new
+        if (!changed) return // samo pomak kursora ili odabira: ništa se ne sprema
         dirty = true
         saveJob?.cancel()
         saveJob = AppScope.scope.launch {
             delay(400)
             AppScope.lock.withLock { saveLocked() }
         }
+    }
+
+    // --- Funkcije (SPEC.md, 3) ---
+
+    /** Umeće trenutni datum i vrijeme na mjesto kursora (ili umjesto odabranog teksta). */
+    fun insertDateTime() {
+        if (readOnly) return
+        val (novi, kursor) = Funkcije.umetni(
+            field.text, field.selection.start, field.selection.end,
+            Funkcije.datumIVrijeme(LocalDateTime.now()),
+        )
+        onFieldChange(TextFieldValue(novi, TextRange(kursor)))
     }
 
     /** Pozvati kad aplikacija ide u pozadinu. */
@@ -104,7 +123,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         saveLocked()
         target = null
         title = null
-        text = ""
+        field = TextFieldValue("")
         lineEnding = LineEnding.CRLF
         hasBom = false
         readOnly = false
@@ -190,12 +209,12 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
 
         val decoded = PapirFile.decode(bytes)
         if (decoded == null) {
-            text = String(bytes, Charsets.UTF_8)
+            field = TextFieldValue(String(bytes, Charsets.UTF_8))
             notText = true
             readOnly = true
             message = "Ovo nije UTF-8 tekst. Otvoreno samo za čitanje."
         } else {
-            text = decoded.text
+            field = TextFieldValue(decoded.text) // kao Notepad: kursor na početku datoteke
             lineEnding = decoded.lineEnding
             hasBom = decoded.hasBom
             notText = false
@@ -218,8 +237,9 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
                 ByteArray(0)
             }
         }
-        val decoded = PapirFile.decode(bytes)
-        text = decoded?.text ?: ""
+        val restored = PapirFile.decode(bytes)?.text ?: ""
+        // Nacrt: kursor na kraju, da se popis nastavlja tamo gdje je stao.
+        field = TextFieldValue(restored, TextRange(restored.length))
         lineEnding = LineEnding.CRLF
         hasBom = false
         target = null

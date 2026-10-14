@@ -33,7 +33,9 @@ jobs:
         run: gradle assembleDebug --no-daemon
 
       - name: Priprema
-        run: cp app/build/outputs/apk/debug/app-debug.apk papir.apk
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk papir.apk
+          echo "VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -44,8 +46,8 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.0-build${{ github.run_number }}
-          name: Papir 0.1.0 (build ${{ github.run_number }})
+          tag_name: v${{ env.VERSION }}-build${{ github.run_number }}
+          name: Papir ${{ env.VERSION }} (build ${{ github.run_number }})
           prerelease: true
           files: papir.apk
           body: |
