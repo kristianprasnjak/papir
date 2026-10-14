@@ -27,10 +27,29 @@ jobs:
           gradle-version: "8.11.1"
 
       - name: Testovi
-        run: gradle testDebugUnitTest --no-daemon
+        run: |
+          set -o pipefail
+          gradle testDebugUnitTest --no-daemon 2>&1 | tee -a gradle.log
 
       - name: Izgradnja APK-a
-        run: gradle assembleDebug --no-daemon
+        run: |
+          set -o pipefail
+          gradle assembleDebug --no-daemon 2>&1 | tee -a gradle.log
+
+      # Greške kompajlera i testova kao bilješke, vidljive u pull requestu i preko API-ja.
+      - name: Greške
+        if: failure()
+        run: |
+          grep -E '^e: ' gradle.log | head -8 | sed 's/^/::error::/' || true
+          python3 - <<'EOF'
+          import glob, xml.etree.ElementTree as ET
+          for f in glob.glob("app/build/test-results/**/*.xml", recursive=True):
+              for case in ET.parse(f).iter("testcase"):
+                  for fail in list(case.iter("failure")) + list(case.iter("error")):
+                      msg = (fail.get("message") or fail.text or "").replace("\n", " ")[:300]
+                      print(f"::error::{case.get('classname')}.{case.get('name')}: {msg}")
+          EOF
+          grep -A4 'What went wrong' gradle.log | head -6 | tr '\n' ' ' | sed 's/^/::error::/'
 
       - name: Priprema
         run: |

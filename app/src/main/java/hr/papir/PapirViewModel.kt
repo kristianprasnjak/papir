@@ -44,10 +44,10 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     private val draft = AtomicFile(File(app.filesDir, "papir.txt"))
 
     /** Tekst kakav se uređuje (krajevi redaka su uvijek \n), zajedno s kursorom i odabirom. */
-    var field by mutableStateOf(TextFieldValue(""))
+    var content by mutableStateOf(TextFieldValue(""))
         private set
 
-    val text: String get() = field.text
+    val text: String get() = content.text
 
     /** Ime datoteke; null znači nacrt koji još nije spremljen kao datoteka. */
     var title by mutableStateOf<String?>(null)
@@ -87,9 +87,9 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     // --- Pisanje ---
 
     fun onFieldChange(new: TextFieldValue) {
-        val changed = new.text != field.text
+        val changed = new.text != content.text
         if (changed && readOnly) return
-        field = new
+        content = new
         if (!changed) return // samo pomak kursora ili odabira: ništa se ne sprema
         dirty = true
         saveJob?.cancel()
@@ -105,7 +105,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     fun insertDateTime() {
         if (readOnly) return
         val (novi, kursor) = Funkcije.umetni(
-            field.text, field.selection.start, field.selection.end,
+            content.text, content.selection.start, content.selection.end,
             Funkcije.datumIVrijeme(LocalDateTime.now()),
         )
         onFieldChange(TextFieldValue(novi, TextRange(kursor)))
@@ -123,7 +123,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         saveLocked()
         target = null
         title = null
-        field = TextFieldValue("")
+        content = TextFieldValue("")
         lineEnding = LineEnding.CRLF
         hasBom = false
         readOnly = false
@@ -209,12 +209,12 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
 
         val decoded = PapirFile.decode(bytes)
         if (decoded == null) {
-            field = TextFieldValue(String(bytes, Charsets.UTF_8))
+            content = TextFieldValue(String(bytes, Charsets.UTF_8))
             notText = true
             readOnly = true
             message = "Ovo nije UTF-8 tekst. Otvoreno samo za čitanje."
         } else {
-            field = TextFieldValue(decoded.text) // kao Notepad: kursor na početku datoteke
+            content = TextFieldValue(decoded.text) // kao Notepad: kursor na početku datoteke
             lineEnding = decoded.lineEnding
             hasBom = decoded.hasBom
             notText = false
@@ -239,7 +239,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         }
         val restored = PapirFile.decode(bytes)?.text ?: ""
         // Nacrt: kursor na kraju, da se popis nastavlja tamo gdje je stao.
-        field = TextFieldValue(restored, TextRange(restored.length))
+        content = TextFieldValue(restored, TextRange(restored.length))
         lineEnding = LineEnding.CRLF
         hasBom = false
         target = null

@@ -245,7 +245,7 @@ private fun PapirScreen(vm: PapirViewModel) {
             }
 
             BasicTextField(
-                value = vm.field,
+                value = vm.content,
                 onValueChange = vm::onFieldChange,
                 readOnly = vm.readOnly,
                 textStyle = TextStyle(
