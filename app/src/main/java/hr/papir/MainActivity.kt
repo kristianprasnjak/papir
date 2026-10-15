@@ -21,7 +21,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -50,13 +52,22 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
 class MainActivity : ComponentActivity() {
@@ -109,10 +120,29 @@ private fun BottomBar(
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onToggle: () -> Unit,
+    current: Stil,
+    onBold: () -> Unit,
+    onItalic: () -> Unit,
+    onSize: (Int) -> Unit,
     onDateTime: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
         if (open) {
+            // Oblikovanje: djeluje na odabrani tekst; veličina bez odabira na cijeli redak.
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FormatButton("B", "Podebljano", current.podebljano, onBold, bold = true)
+                FormatButton("I", "Kurziv", current.kurziv, onItalic, italic = true)
+                Spacer(Modifier.width(8.dp))
+                listOf(-2 to "XS", -1 to "S", 0 to "M", 1 to "L", 2 to "XL").forEach { (v, label) ->
+                    FormatButton(label, "Veličina $label", current.velicina == v, { onSize(v) })
+                }
+            }
             FunctionItem("Datum i vrijeme", onDateTime)
         }
         Row(
@@ -139,6 +169,55 @@ private fun BarButton(symbol: String, description: String, enabled: Boolean, onC
     ) {
         Text(symbol, fontSize = 22.sp)
     }
+}
+
+@Composable
+private fun FormatButton(
+    label: String,
+    description: String,
+    active: Boolean,
+    onClick: () -> Unit,
+    bold: Boolean = false,
+    italic: Boolean = false,
+) {
+    Box(
+        Modifier
+            .size(44.dp)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            fontSize = 15.sp,
+            fontWeight = if (bold || active) FontWeight.Bold else FontWeight.Normal,
+            fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
+            color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Prikaz oblikovanja: oznake su već uklonjene iz teksta, ovdje se samo crta stil (pozicije se ne mijenjaju). */
+private class StilPrikaz(private val stilovi: List<Stil>) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val b = AnnotatedString.Builder(text)
+        for ((od, doo, s) in Oblik.dijelovi(stilovi)) {
+            if (doo <= text.length) b.addStyle(spanOf(s), od, doo)
+        }
+        return TransformedText(b.toAnnotatedString(), OffsetMapping.Identity)
+    }
+
+    private fun spanOf(s: Stil) = SpanStyle(
+        fontWeight = if (s.podebljano) FontWeight.Bold else null,
+        fontStyle = if (s.kurziv) FontStyle.Italic else null,
+        fontSize = when (s.velicina) {
+            2 -> 1.7.em
+            1 -> 1.3.em
+            -1 -> 0.85.em
+            -2 -> 0.7.em
+            else -> TextUnit.Unspecified
+        },
+    )
 }
 
 @Composable
@@ -305,14 +384,17 @@ private fun PapirScreen(vm: PapirViewModel) {
 
                 vm.message?.let { MessageLine(it) { vm.message = null } }
 
+                val styles = vm.styles
+                val prikaz = remember(styles) { StilPrikaz(styles) }
                 BasicTextField(
                     value = vm.content,
                     onValueChange = vm::onFieldChange,
                     readOnly = vm.readOnly,
+                    visualTransformation = prikaz,
                     textStyle = TextStyle(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 17.sp,
-                        lineHeight = 26.sp,
+                        // bez fiksne visine retka: veći naslovi (L, XL) dobivaju svoj prostor
                         color = MaterialTheme.colorScheme.onSurface,
                     ),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -336,6 +418,10 @@ private fun PapirScreen(vm: PapirViewModel) {
                     onUndo = vm::undo,
                     onRedo = vm::redo,
                     onToggle = { functionsOpen = !functionsOpen },
+                    current = vm.currentStyle,
+                    onBold = vm::toggleBold,
+                    onItalic = vm::toggleItalic,
+                    onSize = vm::setSize,
                     onDateTime = { functionsOpen = false; vm.insertDateTime() },
                 )
             }

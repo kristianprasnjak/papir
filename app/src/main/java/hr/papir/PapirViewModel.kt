@@ -55,11 +55,37 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
 
     private val povratak = Povratak()
 
-    /** Tekst kakav se uređuje (krajevi redaka su uvijek \n), zajedno s kursorom i odabirom. */
+    /**
+     * Čisti tekst kakav se vidi i uređuje (bez oznaka i ključa; krajevi redaka \n),
+     * zajedno s kursorom i odabirom.
+     */
     var content by mutableStateOf(TextFieldValue(""))
         private set
 
-    val text: String get() = content.text
+    /** Oblikovanje svakog znaka u [content]. */
+    var styles by mutableStateOf<List<Stil>>(emptyList())
+        private set
+
+    /** Stil za sljedeći upisani znak, izabran dok ništa nije označeno. */
+    private var pendingStyle by mutableStateOf<Stil?>(null)
+
+    /** Tekst kakav ide u datoteku: s oznakama i ključem (SPEC.md, 3.1); bez funkcija goli tekst. */
+    val text: String get() = Oblik.zapisi(content.text, styles).sirovo
+
+    /** Stil na mjestu kursora (ili prvog odabranog znaka), za prikaz gumba. */
+    val currentStyle: Stil
+        get() {
+            pendingStyle?.let { return it }
+            val t = content.text
+            val sel = content.selection
+            if (!sel.collapsed) return styles.getOrElse(sel.min) { Stil.OBICNO }
+            val c = sel.min
+            return when {
+                c > 0 && t.getOrNull(c - 1) != '\n' -> styles.getOrElse(c - 1) { Stil.OBICNO }
+                c < t.length && t[c] != '\n' -> styles.getOrElse(c) { Stil.OBICNO }
+                else -> Stil.OBICNO
+            }
+        }
 
     /** Ime datoteke; null znači papir koji još nije datoteka (nema prvog slova). */
     var title by mutableStateOf<String?>(null)
@@ -125,13 +151,78 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     fun onFieldChange(new: TextFieldValue) {
         val changed = new.text != content.text
         if (changed && readOnly) return
-        if (changed) {
-            povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), Povratak.jeMalaIzmjena(content.text, new.text))
+        if (!changed) {
+            // samo pomak kursora ili odabira: ništa se ne sprema; izabrani stil vrijedi samo na mjestu gdje je izabran
+            if (new.selection != content.selection) pendingStyle = null
+            content = new
+            return
         }
-        content = new
-        if (!changed) return // samo pomak kursora ili odabira: ništa se ne sprema
+        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), Povratak.jeMalaIzmjena(content.text, new.text))
+        val newStyles = Oblik.prilagodi(content.text, styles, new.text, pendingStyle)
+        pendingStyle = null
+        setModel(new, newStyles)
         refreshUndo()
         markDirty()
+    }
+
+    // --- Oblikovanje (SPEC.md, 3.1) ---
+
+    /** Podebljano: na odabranom tekstu, ili za ono što slijedi ako ništa nije odabrano. */
+    fun toggleBold() = restyle(wholeLine = false) { odabrani ->
+        val sve = odabrani.all { it.podebljano }
+        val promjena: (Stil) -> Stil = { s -> s.copy(podebljano = !sve) }
+        promjena
+    }
+
+    fun toggleItalic() = restyle(wholeLine = false) { odabrani ->
+        val sve = odabrani.all { it.kurziv }
+        val promjena: (Stil) -> Stil = { s -> s.copy(kurziv = !sve) }
+        promjena
+    }
+
+    /** Veličina: na odabranom tekstu, a ako ništa nije odabrano, na cijelom retku (naslovi). */
+    fun setSize(velicina: Int) = restyle(wholeLine = true) { _ ->
+        val promjena: (Stil) -> Stil = { s -> s.copy(velicina = velicina) }
+        promjena
+    }
+
+    private fun restyle(wholeLine: Boolean, makeChange: (List<Stil>) -> (Stil) -> Stil) {
+        if (readOnly) return
+        val t = content.text
+        var a = content.selection.min
+        var b = content.selection.max
+        if (a == b && wholeLine) {
+            a = t.lastIndexOf('\n', a - 1) + 1
+            b = t.indexOf('\n', b).let { if (it < 0) t.length else it }
+        }
+        val odabrani = (a until b).filter { t[it] != '\n' }.map { styles.getOrElse(it) { Stil.OBICNO } }
+        if (odabrani.isEmpty()) {
+            // ništa za oblikovati: stil vrijedi za ono što se upravo počinje pisati
+            pendingStyle = makeChange(listOf(currentStyle))(currentStyle)
+            return
+        }
+        val change = makeChange(odabrani)
+        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
+        setModel(content, Oblik.primijeni(t, styles, a, b, change))
+        refreshUndo()
+        markDirty()
+    }
+
+    /**
+     * Postavlja tekst i stilove tako da su uvijek ono što bi se pročitalo iz datoteke
+     * (datoteka je istina): ako je u tekstu s oblikovanjem nastala točna oznaka, ona postaje oznaka.
+     */
+    private fun setModel(value: TextFieldValue, stilovi: List<Stil>) {
+        val zapisano = Oblik.zapisi(value.text, stilovi)
+        val procitano = Oblik.citaj(zapisano.sirovo)
+        if (procitano.tekst == value.text) {
+            content = value
+            styles = procitano.stilovi
+        } else {
+            fun map(i: Int) = procitano.izSirovog[zapisano.uSirovo[i.coerceIn(0, value.text.length)]]
+            content = TextFieldValue(procitano.tekst, TextRange(map(value.selection.start), map(value.selection.end)))
+            styles = procitano.stilovi
+        }
     }
 
     fun undo() {
@@ -275,7 +366,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         if (actual != newName) message = "Sustav je datoteku nazvao „$actual“."
     }
 
-    fun suggestedName(): String = PapirFile.suggestName(text)
+    fun suggestedName(): String = PapirFile.suggestName(content.text)
 
     // --- Unutarnje ---
 
@@ -285,10 +376,14 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
 
     private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { block() }
 
-    private fun stanje() = Stanje(content.text, content.selection.start, content.selection.end)
+    /** Za poništavanje: tekst kakav ide u datoteku (s oznakama) i kursor u čistom tekstu. */
+    private fun stanje() = Stanje(text, content.selection.start, content.selection.end)
 
     private fun applyState(s: Stanje) {
-        content = TextFieldValue(s.text, TextRange(s.start, s.end))
+        val p = Oblik.citaj(s.text)
+        content = TextFieldValue(p.tekst, TextRange(s.start, s.end))
+        styles = p.stilovi
+        pendingStyle = null
         refreshUndo()
         markDirty()
     }
@@ -309,6 +404,8 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun resetTo(value: TextFieldValue) {
         content = value
+        styles = List(value.text.length) { Stil.OBICNO }
+        pendingStyle = null
         lineEnding = LineEnding.CRLF
         hasBom = false
         readOnly = false
@@ -493,17 +590,23 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         val cursor = if (keepCursor) content.selection else TextRange.Zero
         val decoded = PapirFile.decode(bytes)
         if (decoded == null) {
-            content = TextFieldValue(String(bytes, Charsets.UTF_8))
+            val raw = String(bytes, Charsets.UTF_8)
+            content = TextFieldValue(raw)
+            styles = List(raw.length) { Stil.OBICNO }
             notText = true
             message = "Ovo nije UTF-8 tekst. Otvoreno samo za čitanje."
         } else {
-            content = TextFieldValue(decoded.text, cursor)
+            // Oznake i ključ se ne prikazuju; prikazuje se ono što znače (SPEC.md, 3.1).
+            val p = Oblik.citaj(decoded.text)
+            content = TextFieldValue(p.tekst, cursor)
+            styles = p.stilovi
             lineEnding = decoded.lineEnding
             hasBom = decoded.hasBom
             notText = false
         }
         diskBytes = bytes
         dirty = false
+        pendingStyle = null
         refreshUndo()
     }
 

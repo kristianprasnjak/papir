@@ -48,7 +48,13 @@ Ova pravila su iznad svake funkcije. Funkcija koja krši bilo koje od njih ne ul
 - Datoteka bez ključa je običan papir, ispravan i potpun.
 - Ako ključ postoji, ali nije ispravan, datoteka se otvara kao običan tekst. Bez pogađanja.
 - Iza ispravnog ključa svaka funkcija se provjerava zasebno: ispravne oživljavaju, pokvarena se prikazuje kao tekst, ostatak dokumenta radi.
-- **OTVORENO:** točan oblik ključa.
+
+**Oblik ključa (format 1):** zadnji redak datoteke je točno `{papir 1}`.
+
+- Ispred ključa stoji jedan prazan redak; on pripada ključu, a ne tekstu. Ako ga nema, ključ i dalje vrijedi.
+- Iza ključa smije stajati jedan završni prijelom retka (npr. Enter u Notepadu).
+- Sve drugo (`{papir 2}`, `{papir1}`, `{Papir 1}`, ključ koji nije zadnji redak) nije ključ za format 1: datoteka je običan tekst.
+- Aplikacija dodaje ključ kad datoteka dobije prvu živu funkciju, a uklanja ga kad nestane i zadnja. Datoteka bez funkcija je uvijek goli tekst.
 
 ---
 
@@ -62,7 +68,7 @@ Vrste:
 
 | # | Funkcija | Vrsta | Oblik u datoteci | Status |
 |---|---|---|---|---|
-| 0 | Ključ | sistemska | redak na kraju s verzijom formata | OTVORENO |
+| 0 | Ključ | sistemska | zadnji redak `{papir 1}` (vidi 2.3) | format 1 |
 | 1 | Skrivanje | živa | početna oznaka s razinom; cjelina traje do sljedeće oznake iste ili niže razine; podrazine | OTVORENO: znak |
 | 2 | Kvačica | živa | `[ ]` / `[x]` | prijedlog |
 | 3 | Datum i vrijeme | unos | običan tekst, fiksne širine: `09:05 14.10.2026.` | u aplikaciji od 0.2 (ne dira format) |
@@ -70,6 +76,7 @@ Vrste:
 | 5 | 2D raspored | živa | kutije na mreži znakova; otok u papiru ili cijela bilješka | OTVORENO |
 | 6 | Tablica | živa | stupci poravnati razmacima; samo drži, nikad ne računa | OTVORENO |
 | 7 | Poveznica | živa | oznaka + cilj (druga bilješka ili web adresa) | OTVORENO |
+| 8 | Oblikovanje | živa | `{*}` `{/}` `{+}` `{++}` `{-}` `{--}` `{=}` (vidi 3.1) | format 1, od 0.4 |
 
 Pravila za sve funkcije:
 - Aplikacija ne zna tko je što upisao. Funkcija se prepoznaje isključivo po točnom uzorku u tekstu: tko god ga upiše, kroz izbornik ili rukom, dobije funkciju.
@@ -77,6 +84,49 @@ Pravila za sve funkcije:
 - Jedan znak manje i uzorak se raspada: aplikacija prikazuje znakove kao običan tekst.
 - Oznake moraju biti vidljive u Notepadu. Nevidljivi znakovi (npr. širine nula) nisu dopušteni.
 - Oznaka bi trebala biti nešto što bi čovjek mogao i ručno napisati.
+- Oznaka oponaša svoj učinak („onomatopeja"), tako da je i u Notepadu jasno što znači.
+- Posljedica: u datoteci s ključem tekst koji je točno oznaka jest oznaka, i kad je upisan rukom. Format nema „bijeg" kojim bi se oznaka napisala kao obični tekst.
+
+### 3.1 Oblikovanje (format 1)
+
+Oznaka je **prekidač**: tekst iza nje oblikovan je tako do sljedeće oznake ili do kraja retka. Svaki redak počinje obično.
+
+| Znak | Značenje | Zašto baš taj znak |
+|---|---|---|
+| `*` | podebljano | teška zvjezdica |
+| `/` | kurziv | nagnuta crta |
+| `++` | veličina XL | najviše plusa |
+| `+` | veličina L | |
+| (ništa) | veličina M, zadana | |
+| `-` | veličina S | |
+| `--` | veličina XS | najviše minusa |
+| `=` | obično | izjednačeno, ravno |
+
+Pravila:
+
+- Oznaka je `{`, znakovi stanja, `}`. Znakovi stoje točno ovim redom: najviše jedna `*`, zatim najviše jedna `/`, zatim najviše jedna veličina (`++`, `+`, `-` ili `--`). Primjeri: `{*}`, `{/}`, `{*/}`, `{++}`, `{*/+}`, `{--}`.
+- Povratak na obično je `{=}`. Prazne zagrade `{}` nisu oznaka (pojavljuju se u običnom tekstu).
+- **Svaka oznaka opisuje cijelo stanje**, ne mijenja prethodno: `{*}` znači samo podebljano, bez obzira na to što je bilo prije.
+- Sve što nije točno ovakvo (drugi redoslijed `{/*}`, razmak `{ * }`, `{+-}`…) nije oznaka i prikazuje se kao tekst.
+- Pisač ne piše suvišne oznake: oznaku samo kad se stanje mijenja, `{=}` samo usred retka, i nikad na kraju retka.
+
+**Uvijek se čuva:** svaki znak teksta, i koji je znak kako oblikovan.
+
+**Smije se saviti:** točan izgled veličina (aplikacija bira mjere XS–XL), font, razmak redaka.
+
+Primjer u Notepadu:
+
+```
+{++}Namirnice
+Kupiti {*}ODLIČNO{=} mlijeko
+Ivica je rekao {/}2+2=5
+{*/+}Ne zaboraviti kruh
+{-}sitna napomena
+
+{papir 1}
+```
+
+Ogledne datoteke: [`primjeri/`](primjeri/).
 
 ---
 

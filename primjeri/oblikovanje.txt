@@ -1,0 +1,7 @@
+{++}Namirnice
+Kupiti {*}ODLIČNO{=} mlijeko
+Ivica je rekao {/}2+2=5
+{*/+}Ne zaboraviti kruh
+{-}sitna napomena
+
+{papir 1}

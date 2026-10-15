@@ -4,6 +4,25 @@ Prazan papir za mobitel. Otvoriš, pišeš, zatvoriš.
 
 Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zauvijek otvara u bilo kojem programu za tekst, uključujući stari Windows Notepad. Format je otvoren i opisan u [SPEC.md](SPEC.md).
 
+## Verzija 0.4: oblikovanje
+
+Prva živa funkcija i prvi put da datoteka nosi nešto osim tvog teksta (vidi [SPEC.md, 3.1](SPEC.md)).
+
+- u popisu funkcija (**+**): **B** podebljano, *I* kurziv, veličine **XS S M L XL** (M je zadana)
+- djeluje na odabrani tekst; bez odabira B i I vrijede za ono što upravo počinješ pisati, a veličina za cijeli redak (naslovi)
+- u aplikaciji se oznake ne vide; u Notepadu izgledaju ovako, i čitaju se same:
+
+```
+{++}Namirnice
+Kupiti {*}ODLIČNO{=} mlijeko
+
+{papir 1}
+```
+
+- zadnji redak `{papir 1}` je ključ; dodaje se s prvim oblikovanjem i nestaje kad ga više nema, pa je papir bez oblikovanja i dalje goli tekst
+- oblikovanje se može poništiti kao i tipkanje
+- ogledne datoteke formata: [`primjeri/`](primjeri/)
+
 ## Verzija 0.3.1: povjerenje
 
 - **mapa za papire** bira se jednom, pri prvom pokretanju; nacrt iz ranijih verzija postaje datoteka u njoj
