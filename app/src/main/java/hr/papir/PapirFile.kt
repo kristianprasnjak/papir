@@ -66,11 +66,16 @@ object PapirFile {
     }
 
     /**
-     * Ime novog papira u mapi: datum i vrijeme nastanka, da se u upravitelju datoteka
-     * slaže po redu. Korisnik ga može preimenovati u bilo što.
+     * Ime novog papira u mapi. Ako već postoji, sustav sam dodaje broj (Note (1).txt…).
+     * Korisnik ga može preimenovati u bilo što, bilo kad.
      */
-    fun newPaperName(t: java.time.LocalDateTime): String =
-        t.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH.mm")) + ".txt"
+    const val NEW_NAME = "Note.txt"
+
+    /** Ime za drugu verziju kod sukoba, pored originala: „Note (sukob).txt". */
+    fun conflictName(name: String): String {
+        val dot = name.lastIndexOf('.')
+        return if (dot > 0) name.substring(0, dot) + " (sukob)" + name.substring(dot) else "$name (sukob)"
+    }
 
     /** Prijedlog imena za „Spremi kao": prvi redak, bez znakova koje sustavi ne dopuštaju. */
     fun suggestName(text: String): String {

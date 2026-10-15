@@ -4,16 +4,18 @@ Prazan papir za mobitel. Otvoriš, pišeš, zatvoriš.
 
 Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zauvijek otvara u bilo kojem programu za tekst, uključujući stari Windows Notepad. Format je otvoren i opisan u [SPEC.md](SPEC.md).
 
-## Verzija 0.3: povjerenje
+## Verzija 0.3.1: povjerenje
 
-- **prave datoteke od prvog slova**: jednom odabereš mapu za papire, a svaki novi papir odmah postaje datoteka u njoj (ime: datum i vrijeme nastanka, npr. `2026-10-14 21.04.txt`)
+- **mapa za papire** bira se jednom, pri prvom pokretanju; nacrt iz ranijih verzija postaje datoteka u njoj
+- **prave datoteke od prvog slova**: novi papir je `Note.txt` čim dobije prvo slovo; ako ime postoji, Android sam dodaje broj (`Note (1).txt`…)
 - **Preimenuj…**: novo ime je točno ono što upišeš, uključujući nastavak; ako ga sustav ipak promijeni, aplikacija to kaže
-- **poništi ↶ i ponovi ↷** u traci iznad tipkovnice; tipkanje se grupira, novi redak i funkcije su zasebni koraci
-- **nikad tiho prepisivanje**: prije svakog zapisa provjerava se je li datoteka promijenjena izvana (sinkronizacija, drugi program); ako jest, ništa se ne prepisuje dok ne odabereš koju verziju zadržati
+- **poništi ↶ i ponovi ↷** u traci iznad tipkovnice, dok je papir otvoren; tipkanje se grupira, novi redak i funkcije su zasebni koraci
+- **nikad tiho prepisivanje**: prije svakog zapisa provjerava se je li datoteka promijenjena izvana; ako jest, ništa se ne prepisuje dok ne odabereš koju verziju zadržati, a druga postaje vidljiva datoteka u mapi (`Note (sukob).txt`)
 - pri povratku u aplikaciju, ako je datoteka promijenjena izvana, a ovdje nema ničeg nespremljenog, prikazuje se njeno novo stanje
-- **Prethodne verzije…**: zadnjih 30 verzija svakog papira (izvorna prije izmjena, verzija koja je izgubila u sukobu, napušteni nacrt…); dodir je vraća
-- nacrt se više nikad ne briše bez traga
+- **bez skrivenih kopija**: aplikacija ne čuva povijest ni kopije tvog teksta; sve što postoji je u tvojoj mapi
 - aplikacija nema dopuštenje za internet
+
+(0.3.0 je zamijenjena ovom verzijom: imala je skrivenu povijest verzija.)
 
 ## Verzija 0.2
 

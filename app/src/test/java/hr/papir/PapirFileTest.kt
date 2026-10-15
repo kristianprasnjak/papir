@@ -63,6 +63,14 @@ class PapirFileTest {
     }
 
     @Test
+    fun imeZaSukob() {
+        assertEquals("Note (sukob).txt", PapirFile.conflictName("Note.txt"))
+        assertEquals("index (sukob).html", PapirFile.conflictName("index.html"))
+        assertEquals("popis (sukob)", PapirFile.conflictName("popis"))
+        assertEquals(".bashrc (sukob)", PapirFile.conflictName(".bashrc"))
+    }
+
+    @Test
     fun prijedlogImena() {
         assertEquals("Namirnice.txt", PapirFile.suggestName("\n  Namirnice  \nmlijeko"))
         assertEquals("papir.txt", PapirFile.suggestName(""))
