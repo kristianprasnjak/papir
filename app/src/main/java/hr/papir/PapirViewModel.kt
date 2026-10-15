@@ -37,22 +37,22 @@ private object AppScope {
     val lock = Mutex()
 }
 
-enum class Pending { NEW, OPEN }
-
 /**
  * Ustav, pravilo „Ništa se ne gubi":
- * - svaki papir je prava datoteka u mapi koju je korisnik izabrao (nacrt unutar aplikacije
- *   postoji samo dok mapa nije izabrana);
+ * - svaki papir je prava datoteka u mapi koju je korisnik izabrao; aplikacija ne čuva
+ *   nikakve skrivene kopije teksta;
  * - prije svakog zapisa provjerava se je li datoteka promijenjena izvana; ako jest, ništa
- *   se ne prepisuje dok čovjek ne odluči, a obje verzije ostaju sačuvane;
- * - poništavanje, i povijest verzija kao sigurnosna mreža.
+ *   se ne prepisuje dok čovjek ne odluči, a druga verzija postaje vidljiva datoteka u mapi;
+ * - poništavanje dok je papir otvoren.
  */
 class PapirViewModel(app: Application) : AndroidViewModel(app) {
 
     private val resolver = app.contentResolver
     private val prefs = app.getSharedPreferences("papir", Context.MODE_PRIVATE)
-    private val draft = AtomicFile(File(app.filesDir, "papir.txt"))
-    private val povijest = Povijest(File(app.filesDir, "povijest"))
+
+    /** Nacrt iz verzija 0.1 i 0.2. Čita se samo da bi se preselio u mapu, zatim se briše. */
+    private val legacyDraft = AtomicFile(File(app.filesDir, "papir.txt"))
+
     private val povratak = Povratak()
 
     /** Tekst kakav se uređuje (krajevi redaka su uvijek \n), zajedno s kursorom i odabirom. */
@@ -61,7 +61,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
 
     val text: String get() = content.text
 
-    /** Ime datoteke; null znači papir koji još nije datoteka. */
+    /** Ime datoteke; null znači papir koji još nije datoteka (nema prvog slova). */
     var title by mutableStateOf<String?>(null)
         private set
 
@@ -91,13 +91,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     var conflict by mutableStateOf(false)
         private set
 
-    /** Otvoren popis prethodnih verzija (null: zatvoren). */
-    var versions by mutableStateOf<List<Povijest.Verzija>?>(null)
-
     var message by mutableStateOf<String?>(null)
-
-    /** Radnja koja čeka da korisnik odluči što s nespremljenim nacrtom. */
-    var pending by mutableStateOf<Pending?>(null)
 
     private var target: Uri? = null
     private var folder: Uri? = null
@@ -112,18 +106,16 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     /** Verzija nađena na disku u trenutku sukoba. */
     private var theirs: ByteArray? = null
 
-    /** Je li izvorna verzija otvorene datoteke već spremljena u povijest. */
-    private var originalKept = false
-
-    /** Papir koji živi samo u aplikaciji jer mapa još nije izabrana. */
-    val isUnsavedDraft: Boolean get() = target == null && folder == null && text.isNotEmpty()
+    /** Mapa još nije izabrana, a nijedna datoteka nije otvorena: treba izabrati mapu. */
+    val needsFolder: Boolean get() = !hasFolder && title == null
 
     init {
         folder = prefs.getString(KEY_FOLDER, null)?.let(Uri::parse)?.takeIf(::hasPersistedWrite)
         hasFolder = folder != null
         op {
             val last = prefs.getString(KEY_TARGET, null)?.let(Uri::parse)
-            if (last == null || !load(last)) loadDraft()
+            if (last == null || !load(last)) startEmpty()
+            moveLegacyDraft()
             loaded = true
         }
     }
@@ -173,7 +165,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * Pozvati kad se aplikacija vrati u prvi plan. Ako je datoteka promijenjena izvana,
      * a ovdje nema ničeg nespremljenog, prikazuje se njeno stanje: datoteka je istina.
-     * Ono što je zamijenjeno ostaje u poništavanju i u povijesti.
+     * Prethodni prikaz ostaje u poništavanju.
      */
     fun checkExternal() = op {
         val uri = target ?: return@op
@@ -181,45 +173,42 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         if (dirty || conflict || readOnly) return@op
         val onDisk = io { read(uri) } ?: return@op
         if (onDisk.contentEquals(known)) return@op
-        val key = keyOf(uri)
-        val replaced = text
-        io { povijest.spremi(key, replaced) }
         povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
         applyBytes(onDisk, keepCursor = true)
         readOnly = notText || !io { canWrite(uri) }
         message = "Datoteka je promijenjena izvan Papira. Prikazano je novo stanje."
     }
 
-    // --- Sukob ---
+    // --- Sukob: odlučuje čovjek, druga verzija postaje vidljiva datoteka ---
 
-    /** Moja verzija ostaje; ona s diska ide u povijest. */
+    /** Ova verzija ostaje u datoteci; ona izvana sprema se pored nje. */
     fun keepMine() = op {
         val t = theirs ?: return@op
-        val uri = target ?: return@op
-        io { povijest.spremi(keyOf(uri), PapirFile.decode(t)?.text ?: String(t, Charsets.UTF_8)) }
+        val savedAs = saveConflictCopy(t) ?: return@op
         diskBytes = t
         theirs = null
         conflict = false
         dirty = true
         saveLocked()
+        message = "Verzija izvana spremljena je kao „$savedAs“."
     }
 
-    /** Verzija s diska ostaje; moja ide u povijest i u poništavanje. */
+    /** Verzija izvana ostaje u datoteci; ova se sprema pored nje. */
     fun loadTheirs() = op {
         val t = theirs ?: return@op
         val uri = target ?: return@op
-        val mine = text
-        io { povijest.spremi(keyOf(uri), mine) }
+        val savedAs = saveConflictCopy(PapirFile.encode(text, lineEnding, hasBom)) ?: return@op
         povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
         theirs = null
         conflict = false
         applyBytes(t, keepCursor = true)
         readOnly = notText || !io { canWrite(uri) }
+        message = "Tvoja verzija spremljena je kao „$savedAs“."
     }
 
     // --- Izbornik ---
 
-    /** Mapa u kojoj nastaju papiri. Bira se jednom; nacrt koji postoji odmah postaje datoteka u njoj. */
+    /** Mapa u kojoj nastaju papiri. Bira se jednom. */
     fun setFolder(tree: Uri) = op {
         val rw = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
         try {
@@ -231,46 +220,27 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         folder = tree
         hasFolder = true
         prefs.edit().putString(KEY_FOLDER, tree.toString()).apply()
-        if (target == null && text.isNotEmpty()) {
-            dirty = true
-            saveLocked()
-        }
+        moveLegacyDraft()
     }
 
     fun newPaper() = op {
         if (!saveBeforeLeaving()) return@op
-        if (folder == null) {
-            // Bez mape novi papir je nacrt. Stari nacrt se nikad ne briše bez traga.
-            io { clearDraft(keptAs = null) }
-        }
-        resetTo(TextFieldValue(""))
-        target = null
-        title = null
-        canRename = false
-        prefs.edit().remove(KEY_TARGET).apply()
+        startEmpty()
     }
 
     fun open(uri: Uri, fromPicker: Boolean) = op {
         if (!saveBeforeLeaving()) return@op
-        val leavingDraft = target == null && folder == null
         if (fromPicker) persist(uri)
-        if (!load(uri)) {
-            message = "Datoteku nije moguće otvoriti."
-            return@op
-        }
-        // Napušteni nacrt ne nestaje: ide u Prethodne verzije nacrta.
-        if (leavingDraft) io { clearDraft(keptAs = null) }
+        if (!load(uri)) message = "Datoteku nije moguće otvoriti."
     }
 
     /** Trenutni tekst postaje nova datoteka na mjestu i s imenom koje je korisnik izabrao. */
-    fun saveAs(uri: Uri, then: () -> Unit = {}) = op {
+    fun saveAs(uri: Uri) = op {
         persist(uri)
-        val wasDraft = target == null && folder == null
         target = uri
         diskBytes = null // nova datoteka: nema starije verzije s kojom bi bila u sukobu
         theirs = null
         conflict = false
-        originalKept = true
         readOnly = false
         notText = false
         dirty = true
@@ -278,8 +248,6 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
             title = io { displayName(uri) }
             canRename = io { supportsRename(uri) }
             prefs.edit().putString(KEY_TARGET, uri.toString()).apply()
-            if (wasDraft) io { clearDraft(keptAs = text) }
-            then()
         }
     }
 
@@ -299,40 +267,12 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
             message = "Preimenovanje nije uspjelo."
             return@op
         }
-        if (renamed != uri) {
-            io { povijest.preseli(keyOf(uri), keyOf(renamed)) }
-            persist(renamed)
-        }
+        if (renamed != uri) persist(renamed)
         target = renamed
         val actual = io { displayName(renamed) }
         title = actual
         prefs.edit().putString(KEY_TARGET, renamed.toString()).apply()
         if (actual != newName) message = "Sustav je datoteku nazvao „$actual“."
-    }
-
-    fun showVersions() = op {
-        val key = currentKey()
-        versions = io { povijest.popis(key) }
-    }
-
-    /** Vraća stariju verziju kao običnu izmjenu: može se poništiti, a trenutni tekst ide u povijest. */
-    fun restore(v: Povijest.Verzija) = op {
-        versions = null
-        if (readOnly) {
-            message = "Otvoreno samo za čitanje. Za izmjene: Spremi kao…"
-            return@op
-        }
-        val key = currentKey()
-        val current = text
-        val old = io {
-            povijest.spremi(key, current)
-            povijest.procitaj(v)
-        }
-        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
-        content = TextFieldValue(old)
-        refreshUndo()
-        dirty = true
-        saveLocked()
     }
 
     fun suggestedName(): String = PapirFile.suggestName(text)
@@ -377,9 +317,68 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         conflict = false
         theirs = null
         diskBytes = null
-        originalKept = false
         povratak.ocisti()
         refreshUndo()
+    }
+
+    /** Prazan papir. Datoteka nastaje tek s prvim slovom, da se ne gomilaju prazne datoteke. */
+    private fun startEmpty() {
+        resetTo(TextFieldValue(""))
+        target = null
+        title = null
+        canRename = false
+        prefs.edit().remove(KEY_TARGET).apply()
+    }
+
+    /**
+     * Nacrt iz 0.1/0.2 postaje prava datoteka u mapi, i tek nakon uspješnog zapisa
+     * briše se iz aplikacije. Ako je otvoren prazan papir, nacrt se odmah prikazuje.
+     */
+    private suspend fun moveLegacyDraft() {
+        val dir = folder ?: return
+        val old = io {
+            try {
+                if (legacyDraft.baseFile.exists()) PapirFile.decode(legacyDraft.readFully())?.text.orEmpty() else ""
+            } catch (e: Exception) {
+                ""
+            }
+        }
+        if (old.isEmpty()) {
+            io { legacyDraft.delete() }
+            return
+        }
+        val bytes = PapirFile.encode(old, LineEnding.CRLF, false)
+        val created = io {
+            try {
+                createIn(dir, PapirFile.NEW_NAME)?.also { writeUri(it, bytes) }
+            } catch (e: Exception) {
+                null
+            }
+        } ?: return // nacrt ostaje gdje je; pokušat će se ponovno
+        io { legacyDraft.delete() }
+        if (target == null && text.isEmpty()) {
+            if (load(created)) message = "Tvoj nacrt sada je datoteka „$title“ u mapi za papire."
+        } else {
+            message = "Tvoj stari nacrt spremljen je kao „${io { displayName(created) }}“ u mapi za papire."
+        }
+    }
+
+    /** Druga verzija kod sukoba, kao vidljiva datoteka u mapi za papire. Vraća njeno ime. */
+    private suspend fun saveConflictCopy(bytes: ByteArray): String? {
+        val dir = folder
+        val name = PapirFile.conflictName(title ?: PapirFile.NEW_NAME)
+        val created = if (dir == null) null else io {
+            try {
+                createIn(dir, name)?.also { writeUri(it, bytes) }
+            } catch (e: Exception) {
+                null
+            }
+        }
+        if (created == null) {
+            message = "Drugu verziju nije moguće spremiti kao zasebnu datoteku. Ništa nije prepisano."
+            return null
+        }
+        return io { displayName(created) }
     }
 
     /** Papir se napušta samo ako je sve spremljeno; inače ostaje na ekranu. */
@@ -398,47 +397,41 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         val snapshot = text
         val bytes = PapirFile.encode(snapshot, lineEnding, hasBom)
         val uri = target
-        val dir = folder
 
-        val ishod = when {
-            uri == null && dir == null -> io { attempt { writeDraft(bytes) } }
-
-            uri == null -> {
-                // Prvo slovo novog papira: nastaje prava datoteka u mapi.
-                if (snapshot.isEmpty()) return true
-                val created = io {
-                    try {
-                        createIn(dir!!, PapirFile.newPaperName(LocalDateTime.now()))
-                    } catch (e: Exception) {
-                        null
-                    }
-                }
-                if (created == null) {
-                    Ishod.GRESKA
-                } else {
-                    val r = io { attempt { writeUri(created, bytes) } }
-                    if (r == Ishod.OK) {
-                        target = created
-                        originalKept = true
-                        title = io { displayName(created) }
-                        canRename = io { supportsRename(created) }
-                        prefs.edit().putString(KEY_TARGET, created.toString()).apply()
-                        io { clearDraft(keptAs = snapshot) }
-                    }
-                    r
+        val ishod = if (uri == null) {
+            // Prvo slovo novog papira: nastaje prava datoteka u mapi.
+            if (snapshot.isEmpty()) return true
+            val dir = folder ?: run {
+                message = "Odaberi mapu za papire da bi se tekst mogao spremiti."
+                return false
+            }
+            val created = io {
+                try {
+                    createIn(dir, PapirFile.NEW_NAME)
+                } catch (e: Exception) {
+                    null
                 }
             }
-
-            else -> io {
+            if (created == null) {
+                Ishod.GRESKA
+            } else {
+                val r = io { attempt { writeUri(created, bytes) } }
+                if (r == Ishod.OK) {
+                    target = created
+                    title = io { displayName(created) }
+                    canRename = io { supportsRename(created) }
+                    prefs.edit().putString(KEY_TARGET, created.toString()).apply()
+                }
+                r
+            }
+        } else {
+            io {
                 val known = diskBytes
                 val onDisk = if (known != null) read(uri) else null
                 if (known != null && onDisk != null && !onDisk.contentEquals(known)) {
                     theirs = onDisk
                     Ishod.SUKOB
                 } else {
-                    if (!originalKept && known != null) {
-                        PapirFile.decode(known)?.text?.let { povijest.spremi(keyOf(uri), it) }
-                    }
                     attempt { writeUri(uri, bytes) }
                 }
             }
@@ -446,7 +439,6 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
 
         when (ishod) {
             Ishod.OK -> {
-                if (uri != null) originalKept = true
                 diskBytes = bytes
                 if (text == snapshot) dirty = false
             }
@@ -461,32 +453,6 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         Ishod.OK
     } catch (e: Exception) {
         Ishod.GRESKA
-    }
-
-    private fun writeDraft(bytes: ByteArray) {
-        val out = draft.startWrite()
-        try {
-            out.write(bytes)
-            draft.finishWrite(out)
-        } catch (e: Exception) {
-            draft.failWrite(out)
-            throw e
-        }
-    }
-
-    /** Prazni nacrt; ako je u njemu bilo nešto drugo od [keptAs], to prvo ide u povijest. */
-    private fun clearDraft(keptAs: String?) {
-        val old = try {
-            PapirFile.decode(draft.readFully())?.text.orEmpty()
-        } catch (e: Exception) {
-            ""
-        }
-        if (old.isEmpty()) return
-        if (old != keptAs) povijest.spremi(Povijest.NACRT, old)
-        try {
-            writeDraft(ByteArray(0))
-        } catch (_: Exception) {
-        }
     }
 
     private fun writeUri(uri: Uri, bytes: ByteArray) {
@@ -504,7 +470,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun createIn(tree: Uri, name: String): Uri? {
         val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
-        // application/octet-stream: sustav ne dodaje svoj nastavak.
+        // application/octet-stream: sustav ne dodaje svoj nastavak; za postojeće ime sam dodaje broj.
         return DocumentsContract.createDocument(resolver, parent, "application/octet-stream", name)
     }
 
@@ -523,6 +489,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun applyBytes(bytes: ByteArray, keepCursor: Boolean) {
+        // kao Notepad: otvorena datoteka počinje s kursorom na početku
         val cursor = if (keepCursor) content.selection else TextRange.Zero
         val decoded = PapirFile.decode(bytes)
         if (decoded == null) {
@@ -530,7 +497,6 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
             notText = true
             message = "Ovo nije UTF-8 tekst. Otvoreno samo za čitanje."
         } else {
-            // kao Notepad: otvorena datoteka počinje s kursorom na početku
             content = TextFieldValue(decoded.text, cursor)
             lineEnding = decoded.lineEnding
             hasBom = decoded.hasBom
@@ -540,31 +506,6 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         dirty = false
         refreshUndo()
     }
-
-    private suspend fun loadDraft() {
-        val restored = io {
-            try {
-                PapirFile.decode(draft.readFully())?.text.orEmpty()
-            } catch (e: Exception) {
-                ""
-            }
-        }
-        // Nacrt: kursor na kraju, da se popis nastavlja tamo gdje je stao.
-        resetTo(TextFieldValue(restored, TextRange(restored.length)))
-        target = null
-        title = null
-        canRename = false
-        prefs.edit().remove(KEY_TARGET).apply()
-        // Nacrt iz vremena prije mape postaje prava datoteka čim je mapa izabrana.
-        if (folder != null && restored.isNotEmpty()) {
-            dirty = true
-            saveLocked()
-        }
-    }
-
-    private fun currentKey(): String = target?.let(::keyOf) ?: Povijest.NACRT
-
-    private fun keyOf(uri: Uri): String = Povijest.kljuc(uri.toString())
 
     private fun persist(uri: Uri) {
         val rw = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION

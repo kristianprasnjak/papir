@@ -8,7 +8,7 @@ Papir je aplikacija za bilješke za Android: prazan papir kao stari Windows Note
 - Ne uvodi novu oznaku u format bez izričite odluke vlasnika projekta. Format se piše sporo; kod se smije pisati brzo.
 - Aplikacija nikad ne mijenja tekst koji korisnik nije dirao: nema automatskog ispravljanja, prepoznavanja URL-ova, izračuna ni „pametnih" pomoći.
 - Svaka promjena mora proći test od 20 sekundi: dodir ikone → tipkovnica i kursor odmah na papiru.
-- Ništa se ne gubi: nikakav put kroz kod ne smije obrisati ili prepisati korisnikov tekst bez traga. Prije zapisa se provjerava promjena izvana (`diskBytes`); ono što se zamjenjuje ide u `Povijest`.
+- Ništa se ne gubi, ništa se ne skriva: nikakav put kroz kod ne smije obrisati ili prepisati korisnikov tekst bez traga, a aplikacija ne čuva skrivene kopije teksta (vlasnik je odbio povijest verzija). Prije zapisa se provjerava promjena izvana (`diskBytes`); kod sukoba druga verzija postaje vidljiva datoteka u mapi.
 - Nikad ne dodaj dopuštenje `INTERNET` ni bilo kakvu mrežnu biblioteku.
 
 ## Tehnička pravila
