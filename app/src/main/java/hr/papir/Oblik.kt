@@ -11,7 +11,7 @@ data class Stil(
 ) {
     val obicno: Boolean get() = !podebljano && !kurziv && velicina == 0
 
-    /** Oznaka koja opisuje cijelo ovo stanje, npr. `{*/+}`; za obično `{=}`. */
+    /** Oznaka koja opisuje cijelo ovo stanje (npr. podebljano i kurziv); za obično `{=}`. */
     fun oznaka(): String {
         if (obicno) return "{=}"
         val sb = StringBuilder("{")
