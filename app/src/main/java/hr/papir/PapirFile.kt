@@ -19,7 +19,7 @@ data class Decoded(
 )
 
 /**
- * Jedino mjesto koje pretvara bajtove u tekst i natrag (SPEC.md, 2.1).
+ * Jedino mjesto koje pretvara bajtove u tekst i natrag (STANDARD.md, 2.1).
  *
  * - UTF-8, strogo: neispravan UTF-8 nije tekst koji smijemo prepisati.
  * - Postojeća datoteka zadržava svoj kraj retka i BOM.
@@ -66,12 +66,12 @@ object PapirFile {
     }
 
     /**
-     * Ime novog papira u mapi. Ako već postoji, sustav sam dodaje broj (Note (1).txt…).
+     * Ime novog papira u mapi. Ako već postoji, sustav sam dodaje broj (Note (1).pap…).
      * Korisnik ga može preimenovati u bilo što, bilo kad.
      */
-    const val NEW_NAME = "Note.txt"
+    const val NEW_NAME = "Note.pap"
 
-    /** Ime za drugu verziju kod sukoba, pored originala: „Note (sukob).txt". */
+    /** Ime za drugu verziju kod sukoba, pored originala: „Note (sukob).pap". */
     fun conflictName(name: String): String {
         val dot = name.lastIndexOf('.')
         return if (dot > 0) name.substring(0, dot) + " (sukob)" + name.substring(dot) else "$name (sukob)"
@@ -81,6 +81,6 @@ object PapirFile {
     fun suggestName(text: String): String {
         val firstLine = text.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
         val clean = firstLine.filterNot { it in "/\\:*?\"<>|" || it.isISOControl() }.take(40).trim()
-        return (clean.ifEmpty { "papir" }) + ".txt"
+        return (clean.ifEmpty { "Note" }) + ".pap"
     }
 }

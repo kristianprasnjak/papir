@@ -4,7 +4,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 /**
- * Funkcije koje korisnik izričito umeće iz izbornika (SPEC.md, 3).
+ * Funkcije koje korisnik izričito umeće iz izbornika (PAPIR.md, ustav 4).
  *
  * Ovdje je samo čista logika, bez Androida, da se može testirati.
  */

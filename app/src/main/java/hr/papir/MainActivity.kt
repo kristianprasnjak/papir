@@ -1,5 +1,6 @@
 package hr.papir
 
+import android.content.ClipData
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -16,6 +17,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.key
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
@@ -119,7 +125,7 @@ class MainActivity : ComponentActivity() {
 
 /**
  * Traka iznad tipkovnice, na dohvat palca: lijevo poništi i ponovi, desno funkcije.
- * Jedan dodir otvara popis funkcija, drugi umeće funkciju (SPEC.md, ustav 4).
+ * Jedan dodir otvara popis funkcija, drugi umeće funkciju (PAPIR.md, ustav 4).
  *
  * Popis je dio rasporeda, a ne skočni prozor, pa ga tipkovnica ne može prekriti
  * i ne oduzima fokus papiru (tipkovnica ostaje otvorena).
@@ -140,15 +146,18 @@ private fun BottomBar(
     onDateTime: () -> Unit,
     textFunctions: Boolean,
     onTable: () -> Unit,
+    tableShape: Pair<Int, Int>?,
+    onTableAction: (TableAction) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
         if (open && !textFunctions) {
-            Text(
-                "U ćeliji tablice zasad se samo piše.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-            )
+            // U ćeliji: radnje s tablicom. Svaka je jedan korak za ↶.
+            val (retci, stupci) = tableShape ?: (0 to 0)
+            FunctionItem("Novi redak ispod", { onTableAction(TableAction.RowBelow) }, tableShape != null)
+            FunctionItem("Novi stupac desno", { onTableAction(TableAction.ColumnRight) }, tableShape != null)
+            FunctionItem("Obriši redak", { onTableAction(TableAction.DeleteRow) }, retci > 1)
+            FunctionItem("Obriši stupac", { onTableAction(TableAction.DeleteColumn) }, stupci > 1)
+            FunctionItem("Obriši tablicu", { onTableAction(TableAction.DeleteTable) }, tableShape != null)
         }
         if (open && textFunctions) {
             // Oblikovanje: djeluje na odabrani tekst; veličina djeluje na cijele retke.
@@ -244,18 +253,25 @@ private class StilPrikaz(private val stilovi: List<Stil>) : VisualTransformation
     )
 }
 
+/** Radnje s tablicom iz popisa funkcija, dok je kursor u ćeliji. */
+private enum class TableAction { RowBelow, ColumnRight, DeleteRow, DeleteColumn, DeleteTable }
+
 @Composable
-private fun FunctionItem(label: String, onClick: () -> Unit) {
+private fun FunctionItem(label: String, onClick: () -> Unit, enabled: Boolean = true) {
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp),
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.38f),
+        )
     }
 }
 
@@ -333,8 +349,39 @@ private fun PapirScreen(vm: PapirViewModel) {
     val odsjecci = remember(linije.size, vm.tables) { Odsjecci.podijeli(linije.size, vm.tables) }
     val requesters = remember(odsjecci.size) { List(odsjecci.size) { FocusRequester() } }
     var focusedCell by remember { mutableStateOf<Any?>(null) }
+    var focusText by remember { mutableStateOf(0) }
+    val cell = focusedCell as? Triple<*, *, *>
+    val cellTable = cell?.first as? Int
+    val tableShape = cellTable?.let { k ->
+        vm.tables.getOrNull(k)?.let { raspon ->
+            Tablice.citaj(linije.subList(raspon.first, raspon.last + 1))?.let { it.retci.size to it.sirine.size }
+        }
+    }
 
-    LaunchedEffect(showPaper, vm.title) {
+    fun onTableAction(a: TableAction) {
+        val k = cellTable ?: return
+        val r = cell?.second as? Int ?: return
+        val c = cell?.third as? Int ?: return
+        val (retci, stupci) = tableShape ?: return
+        when (a) {
+            TableAction.RowBelow -> vm.editTable(k) { it.sRetkomIspod(r) }
+            TableAction.ColumnRight -> vm.editTable(k) { it.sStupcemDesno(c) }
+            TableAction.DeleteRow -> vm.editTable(k) { it.bezRetka(r) }
+            TableAction.DeleteColumn -> vm.editTable(k) { it.bezStupca(c) }
+            TableAction.DeleteTable -> vm.deleteTable(k)
+        }
+        // ako ćelija s kursorom više ne postoji, kursor se vraća u tekst
+        val nestala = a == TableAction.DeleteTable ||
+            (a == TableAction.DeleteRow && r == retci - 1) ||
+            (a == TableAction.DeleteColumn && c == stupci - 1)
+        if (nestala) {
+            focusedCell = null
+            functionsOpen = false
+            focusText++
+        }
+    }
+
+    LaunchedEffect(showPaper, vm.title, focusText) {
         if (showPaper && !vm.readOnly) {
             // kursor u odsječku teksta u kojem je bio; papir bez tablica ima samo jedan
             val kursor = vm.content.selection.start
@@ -453,6 +500,8 @@ private fun PapirScreen(vm: PapirViewModel) {
                     onDateTime = { functionsOpen = false; vm.insertDateTime() },
                     textFunctions = focusedCell == null,
                     onTable = { functionsOpen = false; vm.insertTable() },
+                    tableShape = tableShape,
+                    onTableAction = { onTableAction(it) },
                 )
             }
         }
@@ -598,23 +647,57 @@ private fun TextSegment(
         if (end <= styles.size) styles.subList(start, end).toList() else List(dio.length) { Stil.OBICNO }
     }
     val prikaz = remember(dijelStilova) { StilPrikaz(dijelStilova) }
-    BasicTextField(
-        value = TextFieldValue(dio, lokalno, comp),
-        onValueChange = { vm.onSegmentChange(odsjecak.od, odsjecak.doo, it) },
-        readOnly = vm.readOnly,
-        visualTransformation = prikaz,
-        textStyle = papirStil(),
-        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        // Ustav: papir ne ispravlja i ne mijenja ono što pišeš.
-        keyboardOptions = KeyboardOptions(
-            capitalization = KeyboardCapitalization.None,
-            autoCorrectEnabled = false,
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .let { if (requester != null) it.focusRequester(requester) else it }
-            .onFocusChanged { if (it.isFocused) onFocused() },
-    )
+
+    // Kopiranje šalje i goli tekst i HTML s pravim oblikovanjem (PAPIR.md, 4).
+    val trenutno by rememberUpdatedState(Triple(dio, lokalno, dijelStilova))
+    val base = LocalClipboardManager.current
+    val context = LocalContext.current
+    val clipboard = remember(base, context) {
+        PapirClipboard(base, context.getSystemService(android.content.ClipboardManager::class.java)) {
+            val (d, s, st) = trenutno
+            if (s.collapsed || s.max > d.length || st.size != d.length) null
+            else d.substring(s.min, s.max) to st.subList(s.min, s.max)
+        }
+    }
+    CompositionLocalProvider(LocalClipboardManager provides clipboard) {
+        BasicTextField(
+            value = TextFieldValue(dio, lokalno, comp),
+            onValueChange = { vm.onSegmentChange(odsjecak.od, odsjecak.doo, it) },
+            readOnly = vm.readOnly,
+            visualTransformation = prikaz,
+            textStyle = papirStil(),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            // Ustav: papir ne ispravlja i ne mijenja ono što pišeš.
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.None,
+                autoCorrectEnabled = false,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .let { if (requester != null) it.focusRequester(requester) else it }
+                .onFocusChanged { if (it.isFocused) onFocused() },
+        )
+    }
+}
+
+/**
+ * Međuspremnik koji uz goli tekst šalje i HTML, kad odabrani tekst ima oblikovanje.
+ * Program u koji se lijepi sam bira verziju koju zna. Znakovi formata se nikad ne kopiraju.
+ */
+private class PapirClipboard(
+    private val base: ClipboardManager,
+    private val native: android.content.ClipboardManager?,
+    private val odabrano: () -> Pair<String, List<Stil>>?,
+) : ClipboardManager by base {
+    override fun setText(annotatedString: AnnotatedString) {
+        val goli = annotatedString.text
+        val o = odabrano()
+        if (native == null || o == null || o.first != goli || o.second.all { it.obicno }) {
+            base.setText(annotatedString)
+            return
+        }
+        native.setPrimaryClip(ClipData.newHtmlText("Papir", goli, Html.iz(goli, o.second)))
+    }
 }
 
 /**
@@ -686,7 +769,7 @@ private fun TableView(
 
 /**
  * Jedna ćelija. Drži svoj kursor; tekst dolazi iz txt-a. Razmaci na kraju i prazni redovi na
- * kraju ćelije se ne čuvaju u datoteci (SPEC.md, 3.2), pa se uspoređuje normalizirano.
+ * kraju ćelije se ne čuvaju u datoteci (STANDARD.md, 4), pa se uspoređuje normalizirano.
  */
 @Composable
 private fun CellEditor(

@@ -27,6 +27,16 @@
                 <data android:scheme="content" />
                 <data android:mimeType="text/*" />
             </intent-filter>
+
+            <!-- Datoteke s nastavkom koji sustav ne poznaje, npr. .pap: kao Notepad, otvara se sve;
+                 što nije UTF-8 tekst otvara se samo za čitanje -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.EDIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>

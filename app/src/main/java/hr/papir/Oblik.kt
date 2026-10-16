@@ -1,7 +1,7 @@
 package hr.papir
 
 /**
- * Oblikovanje jednog znaka (SPEC.md, 3.1).
+ * Oblikovanje jednog znaka (STANDARD.md, 3).
  * Podebljano i kurziv vrijede za znak; veličina za cijeli redak
  * (-2 XS, -1 S, 0 M zadano, 1 L, 2 XL).
  */
@@ -18,14 +18,22 @@ data class Stil(
 }
 
 /**
- * Čitač i pisač formata 1 (SPEC.md, 2.3 i 3.1): čisti tekst + stil svakog znaka ⇄ txt.
+ * Čitač i pisač formata 1 (STANDARD.md, 2.4 i 3): čisti tekst + stil svakog znaka ⇄ txt.
  *
  * Čista logika bez Androida. Pozicije se preslikavaju u oba smjera
  * da kursor ostane na istom mjestu u tekstu.
  */
 object Oblik {
 
+    /** Broj formata koji ovaj čitač i pisač poznaje. */
+    const val FORMAT = 1
+
+    /** Ključ formata 1; općenito `─── papir N ───` (STANDARD.md, 2.4). */
     const val KLJUC = "─── papir 1 ───"
+
+    fun kljuc(format: Int): String = "─── papir $format ───"
+
+    private val UZORAK_KLJUCA = Regex("─── papir ([1-9][0-9]{0,8}) ───")
 
     const val PODEBLJANO_OD = '▐' // U+2590, Alt+222
     const val PODEBLJANO_DO = '▌' // U+258C, Alt+221
@@ -50,6 +58,8 @@ object Oblik {
         val tablice: List<IntRange> = emptyList(),
         /** Je li datoteka imala ključ. */
         val kljuc: Boolean = false,
+        /** Broj formata iz ključa; 0 ako ključa nema. */
+        val format: Int = 0,
     )
 
     class Zapisano(
@@ -61,18 +71,25 @@ object Oblik {
     // --- Ključ ---
 
     /** Tijelo datoteke bez ključa i praznog retka ispred njega; null ako ispravnog ključa nema. */
-    fun tijelo(sirovo: String): String? {
+    fun tijelo(sirovo: String): String? = razdvoji(sirovo)?.first
+
+    /** Broj formata iz ključa (`─── papir N ───`, N ≥ 1 bez vodećih nula); 0 ako ključa nema. */
+    fun format(sirovo: String): Int = razdvoji(sirovo)?.second ?: 0
+
+    private fun razdvoji(sirovo: String): Pair<String, Int>? {
         val s = if (sirovo.endsWith("\n")) sirovo.dropLast(1) else sirovo
-        if (s == KLJUC) return ""
-        if (!s.endsWith("\n$KLJUC")) return null
-        val body = s.dropLast(KLJUC.length + 1)
-        return if (body.endsWith("\n")) body.dropLast(1) else body
+        val zadnji = s.substring(s.lastIndexOf('\n') + 1)
+        val m = UZORAK_KLJUCA.matchEntire(zadnji) ?: return null
+        val n = m.groupValues[1].toInt()
+        if (zadnji.length == s.length) return "" to n
+        val body = s.dropLast(zadnji.length + 1)
+        return (if (body.endsWith("\n")) body.dropLast(1) else body) to n
     }
 
     // --- Čitač ---
 
     fun citaj(sirovo: String): Procitano {
-        val body = tijelo(sirovo) ?: return goliTekst(sirovo)
+        val (body, format) = razdvoji(sirovo) ?: return goliTekst(sirovo)
 
         val redovi = body.split("\n")
         val pocetci = IntArray(redovi.size)
@@ -97,7 +114,7 @@ object Oblik {
             }
             val tablica = tablice.firstOrNull { it.first == i }
             if (tablica != null) {
-                // Tablica stoji u čistom tekstu doslovno; crta je prikaz (SPEC.md, 3.2).
+                // Tablica stoji u čistom tekstu doslovno; crta je prikaz (STANDARD.md, 4).
                 val prviRedak = linije.size
                 for (t in tablica) {
                     if (t > i) {
@@ -153,7 +170,7 @@ object Oblik {
             i += redova
         }
         for (k in body.length..sirovo.length) mapa[k] = sb.length
-        return Procitano(sb.toString(), stilovi, mapa, linije, tabliceCisto, kljuc = true)
+        return Procitano(sb.toString(), stilovi, mapa, linije, tabliceCisto, kljuc = true, format = format)
     }
 
     private fun goliTekst(sirovo: String): Procitano = Procitano(
@@ -236,15 +253,21 @@ object Oblik {
      * retka ne dira nijedan drugi.
      *
      * Tablice u čistom tekstu prepoznaju se samo ako papir već ima ključ ([kljuc]) ili oblikovanje,
-     * da tablica nacrtana u golom tekstu ne dobije ključ bez korisnikove odluke (SPEC.md, 3.2).
+     * da tablica nacrtana u golom tekstu ne dobije ključ bez korisnikove odluke (STANDARD.md, 4).
      * Prepoznata tablica zapisuje se doslovno i papiru daje ključ.
+     *
+     * [format] je broj iz ključa pročitane datoteke. Pisač ga nikad ne smanjuje, a papir novijeg
+     * formata uvijek zadržava ključ, jer u njemu mogu biti oznake koje ovaj pisač ne poznaje
+     * (STANDARD.md, 7).
      */
     fun zapisi(
         tekst: String,
         stilovi: List<Stil>,
         prethodne: List<Linija> = emptyList(),
         kljuc: Boolean = false,
+        format: Int = 0,
     ): Zapisano {
+        val noviji = format > FORMAT
         val mapa = IntArray(tekst.length + 1)
         val st = if (stilovi.size == tekst.length) stilovi else List(tekst.length) { Stil.OBICNO }
 
@@ -275,9 +298,9 @@ object Oblik {
 
         val imaOblikovanje = st.any { !it.obicno }
         val uTablici = BooleanArray(linije.size)
-        if (kljuc || imaOblikovanje) for (t in Tablice.nadji(linije)) for (k in t) uTablici[k] = true
+        if (kljuc || noviji || imaOblikovanje) for (t in Tablice.nadji(linije)) for (k in t) uTablici[k] = true
         val imaTablicu = uTablici.any { it }
-        val oblikovano = imaOblikovanje || imaTablicu ||
+        val oblikovano = noviji || imaOblikovanje || imaTablicu ||
             linije.indices.any { izvor[it] != null && izvor[it] != linije[it] }
         if (!oblikovano) {
             for (k in mapa.indices) mapa[k] = k
@@ -303,11 +326,11 @@ object Oblik {
         }
         mapa[tekst.length] = sb.length
         // Ako nijedan redak nije dobio nijednu oznaku (npr. „naslov" od samih razmaka), papir je goli tekst.
-        if (!imaTablicu && sb.length == tekst.length && sb.toString() == tekst) {
+        if (!noviji && !imaTablicu && sb.length == tekst.length && sb.toString() == tekst) {
             for (k in mapa.indices) mapa[k] = k
             return Zapisano(tekst, mapa)
         }
-        sb.append("\n\n").append(KLJUC)
+        sb.append("\n\n").append(kljuc(maxOf(format, FORMAT)))
         return Zapisano(sb.toString(), mapa)
     }
 
