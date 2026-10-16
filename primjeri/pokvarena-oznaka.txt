@@ -1,5 +1,9 @@
-Kupiti {*ODLIČNO{=} mlijeko
-Ivica je rekao {/*}2+2=5
-Temperatura {-}-5°C
+Kupiti ▐ODLIČNO mlijeko
+Križanje: ▐a‹b▌c›
+Prazno: ▐▌ i ‹›
+Naslov
+────
+░░░ tri sjene
+Dva puta: ▐a▐b▌
 
-{papir 1}
+─── papir 1 ───

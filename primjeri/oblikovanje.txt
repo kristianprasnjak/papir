@@ -1,7 +1,12 @@
-{++}Namirnice
-Kupiti {*}ODLIČNO{=} mlijeko
-Ivica je rekao {/}2+2=5
-{*/+}Ne zaboraviti kruh
-{-}sitna napomena
+Palačinke
+═════════
 
-{papir 1}
+Sastojci
+────────
+200 g brašna, ▐glatkog▌
+Ivica je rekao ‹2+2=5›
+▐‹Ne zaboraviti kruh›▌
+░ može i s malo mineralne vode
+░░ još sitnije
+
+─── papir 1 ───

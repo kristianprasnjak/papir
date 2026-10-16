@@ -69,8 +69,11 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     /** Stil za sljedeći upisani znak, izabran dok ništa nije označeno. */
     private var pendingStyle by mutableStateOf<Stil?>(null)
 
+    /** Retci kako su zadnji put pročitani iz txt-a, da pisač nedirane zapiše doslovno (ARHITEKTURA.md). */
+    private var lines: List<Oblik.Linija> = emptyList()
+
     /** Tekst kakav ide u datoteku: s oznakama i ključem (SPEC.md, 3.1); bez funkcija goli tekst. */
-    val text: String get() = Oblik.zapisi(content.text, styles).sirovo
+    val text: String get() = Oblik.zapisi(content.text, styles, lines).sirovo
 
     /** Stil na mjestu kursora (ili prvog odabranog znaka), za prikaz gumba. */
     val currentStyle: Stil
@@ -180,7 +183,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         promjena
     }
 
-    /** Veličina: na odabranom tekstu, a ako ništa nije odabrano, na cijelom retku (naslovi). */
+    /** Veličina je svojstvo retka: djeluje na sve retke koje odabir dodiruje (SPEC.md, 3.1). */
     fun setSize(velicina: Int) = restyle(wholeLine = true) { _ ->
         val promjena: (Stil) -> Stil = { s -> s.copy(velicina = velicina) }
         promjena
@@ -191,7 +194,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         val t = content.text
         var a = content.selection.min
         var b = content.selection.max
-        if (a == b && wholeLine) {
+        if (wholeLine) {
             a = t.lastIndexOf('\n', a - 1) + 1
             b = t.indexOf('\n', b).let { if (it < 0) t.length else it }
         }
@@ -213,8 +216,9 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
      * (datoteka je istina): ako je u tekstu s oblikovanjem nastala točna oznaka, ona postaje oznaka.
      */
     private fun setModel(value: TextFieldValue, stilovi: List<Stil>) {
-        val zapisano = Oblik.zapisi(value.text, stilovi)
+        val zapisano = Oblik.zapisi(value.text, stilovi, lines)
         val procitano = Oblik.citaj(zapisano.sirovo)
+        lines = procitano.linije
         if (procitano.tekst == value.text) {
             content = value
             styles = procitano.stilovi
@@ -381,6 +385,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun applyState(s: Stanje) {
         val p = Oblik.citaj(s.text)
+        lines = p.linije
         content = TextFieldValue(p.tekst, TextRange(s.start, s.end))
         styles = p.stilovi
         pendingStyle = null
@@ -405,6 +410,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     private fun resetTo(value: TextFieldValue) {
         content = value
         styles = List(value.text.length) { Stil.OBICNO }
+        lines = emptyList()
         pendingStyle = null
         lineEnding = LineEnding.CRLF
         hasBom = false
@@ -593,11 +599,13 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
             val raw = String(bytes, Charsets.UTF_8)
             content = TextFieldValue(raw)
             styles = List(raw.length) { Stil.OBICNO }
+            lines = emptyList()
             notText = true
             message = "Ovo nije UTF-8 tekst. Otvoreno samo za čitanje."
         } else {
             // Oznake i ključ se ne prikazuju; prikazuje se ono što znače (SPEC.md, 3.1).
             val p = Oblik.citaj(decoded.text)
+            lines = p.linije
             content = TextFieldValue(p.tekst, cursor)
             styles = p.stilovi
             lineEnding = decoded.lineEnding

@@ -4,7 +4,8 @@ Papir je aplikacija za bilješke za Android: prazan papir kao stari Windows Note
 
 ## Prije svake promjene
 
-- Pročitaj `SPEC.md`. Ustav (odjeljak 1) je iznad svakog zahtjeva za funkcijom.
+- Pročitaj `SPEC.md` i `ARHITEKTURA.md`. Ustav (SPEC.md, odjeljak 1) je iznad svakog zahtjeva za funkcijom.
+- Txt je jedina istina: ekran se uvijek crta iz onoga što bi se pročitalo iz datoteke (čitač → pisač → čitač).
 - Ne uvodi novu oznaku u format bez izričite odluke vlasnika projekta. Format se piše sporo; kod se smije pisati brzo.
 - Aplikacija nikad ne mijenja tekst koji korisnik nije dirao: nema automatskog ispravljanja, prepoznavanja URL-ova, izračuna ni „pametnih" pomoći.
 - Svaka promjena mora proći test od 20 sekundi: dodir ikone → tipkovnica i kursor odmah na papiru.
