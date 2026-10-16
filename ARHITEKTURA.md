@@ -11,7 +11,7 @@
 | **Čitač** | txt → papir: retci (XL/L naslovi, M, S, XS), unutar njih podebljano i kurziv; sve što ne štima točno ostaje tekst | `Oblik.citaj` |
 | **Pisač** | papir → txt: najmanje oznaka; retke koje nisi dirao zapisuje doslovno kakvi su bili | `Oblik.zapisi` |
 | **Prikaz** | papir → ekran: crta značenje, nikad znakove oznaka; slobodan izbor fonta (jednake širine), mjera i boja | `MainActivity` |
-| **Tablice** | prepoznavanje, čitanje i crtanje tablica (SPEC.md, 3.2); u čistom tekstu tablica stoji doslovno | `Tablica.kt` |
+| **Tablice** | prepoznavanje, čitanje i crtanje tablica (STANDARD.md, 4); u čistom tekstu tablica stoji doslovno | `Tablica.kt` |
 
 Čitač i pisač su čista logika bez Androida: dobiju tekst, vrate tekst. Zato se mogu iscrpno testirati.
 
@@ -34,7 +34,7 @@ Spremanje (s provjerom promjene izvana), sukobi i poništavanje rade nad txt-om,
 
 ## Kako se drže pravila pod kontrolom
 
-- Svako pravilo je prvo zapisano u [SPEC.md](SPEC.md), tek onda u kodu.
+- Svako pravilo formata je prvo zapisano u [STANDARD.md](STANDARD.md), a svako pravilo aplikacije u [PAPIR.md](PAPIR.md), tek onda u kodu.
 - Ogledne datoteke u [`primjeri/`](primjeri/): za svako pravilo txt koji se mora pročitati točno određeno. `OblikTest` ih provjerava.
 - **Testovi nasumičnim izmjenama** (`OblikNasumicnoTest`): tisuće nasumičnih izmjena, a nakon svake provjera da se txt čita onako kako se prikazuje, da nijedno slovo nije nestalo i da su nedirani retci bajt za bajt isti.
 
@@ -47,4 +47,4 @@ Spremanje (s provjerom promjene izvana), sukobi i poništavanje rade nad txt-om,
 | 0.7 | Dodavanje i brisanje redaka i stupaca, brisanje tablice, datum u ćeliji |
 | 0.8 | Povlačenje zida, prijelomi s `↓`, „Popravi tablicu" |
 
-Dogovoreno za tablice (0.6 je u SPEC.md 3.2; ostatak dolazi): zidovi od tankih linija `┌ ┬ ┐ │ ├ ┼ ┤ └ ┴ ┘ ─`, dvostruka crta `╞ ═ ╪ ╡` ispod zaglavlja, crta između svaka dva retka tablice; Enter u ćeliji je pravi novi red; tipkanje nikad ne prelama nego širi stupac; prelama samo sužavanje stupca, a takav prijelom ima `↓` (Alt+25) uz desni zid ćelije; stupac sa strelicom zadržava širinu koju je postavio korisnik.
+Dogovoreno za tablice (format je u STANDARD.md, 4; ostatak dolazi): zidovi od tankih linija `┌ ┬ ┐ │ ├ ┼ ┤ └ ┴ ┘ ─`, dvostruka crta `╞ ═ ╪ ╡` ispod zaglavlja, crta između svaka dva retka tablice; Enter u ćeliji je pravi novi red; tipkanje nikad ne prelama nego širi stupac; prelama samo sužavanje stupca, a takav prijelom ima `↓` (Alt+25) uz desni zid ćelije; stupac sa strelicom zadržava širinu koju je postavio korisnik.

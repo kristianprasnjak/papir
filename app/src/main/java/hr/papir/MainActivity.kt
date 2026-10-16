@@ -1,5 +1,6 @@
 package hr.papir
 
+import android.content.ClipData
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -16,6 +17,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.key
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
@@ -119,7 +125,7 @@ class MainActivity : ComponentActivity() {
 
 /**
  * Traka iznad tipkovnice, na dohvat palca: lijevo poništi i ponovi, desno funkcije.
- * Jedan dodir otvara popis funkcija, drugi umeće funkciju (SPEC.md, ustav 4).
+ * Jedan dodir otvara popis funkcija, drugi umeće funkciju (PAPIR.md, ustav 4).
  *
  * Popis je dio rasporeda, a ne skočni prozor, pa ga tipkovnica ne može prekriti
  * i ne oduzima fokus papiru (tipkovnica ostaje otvorena).
@@ -598,23 +604,57 @@ private fun TextSegment(
         if (end <= styles.size) styles.subList(start, end).toList() else List(dio.length) { Stil.OBICNO }
     }
     val prikaz = remember(dijelStilova) { StilPrikaz(dijelStilova) }
-    BasicTextField(
-        value = TextFieldValue(dio, lokalno, comp),
-        onValueChange = { vm.onSegmentChange(odsjecak.od, odsjecak.doo, it) },
-        readOnly = vm.readOnly,
-        visualTransformation = prikaz,
-        textStyle = papirStil(),
-        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        // Ustav: papir ne ispravlja i ne mijenja ono što pišeš.
-        keyboardOptions = KeyboardOptions(
-            capitalization = KeyboardCapitalization.None,
-            autoCorrectEnabled = false,
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .let { if (requester != null) it.focusRequester(requester) else it }
-            .onFocusChanged { if (it.isFocused) onFocused() },
-    )
+
+    // Kopiranje šalje i goli tekst i HTML s pravim oblikovanjem (PAPIR.md, 4).
+    val trenutno by rememberUpdatedState(Triple(dio, lokalno, dijelStilova))
+    val base = LocalClipboardManager.current
+    val context = LocalContext.current
+    val clipboard = remember(base, context) {
+        PapirClipboard(base, context.getSystemService(android.content.ClipboardManager::class.java)) {
+            val (d, s, st) = trenutno
+            if (s.collapsed || s.max > d.length || st.size != d.length) null
+            else d.substring(s.min, s.max) to st.subList(s.min, s.max)
+        }
+    }
+    CompositionLocalProvider(LocalClipboardManager provides clipboard) {
+        BasicTextField(
+            value = TextFieldValue(dio, lokalno, comp),
+            onValueChange = { vm.onSegmentChange(odsjecak.od, odsjecak.doo, it) },
+            readOnly = vm.readOnly,
+            visualTransformation = prikaz,
+            textStyle = papirStil(),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            // Ustav: papir ne ispravlja i ne mijenja ono što pišeš.
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.None,
+                autoCorrectEnabled = false,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .let { if (requester != null) it.focusRequester(requester) else it }
+                .onFocusChanged { if (it.isFocused) onFocused() },
+        )
+    }
+}
+
+/**
+ * Međuspremnik koji uz goli tekst šalje i HTML, kad odabrani tekst ima oblikovanje.
+ * Program u koji se lijepi sam bira verziju koju zna. Znakovi formata se nikad ne kopiraju.
+ */
+private class PapirClipboard(
+    private val base: ClipboardManager,
+    private val native: android.content.ClipboardManager?,
+    private val odabrano: () -> Pair<String, List<Stil>>?,
+) : ClipboardManager by base {
+    override fun setText(annotatedString: AnnotatedString) {
+        val goli = annotatedString.text
+        val o = odabrano()
+        if (native == null || o == null || o.first != goli || o.second.all { it.obicno }) {
+            base.setText(annotatedString)
+            return
+        }
+        native.setPrimaryClip(ClipData.newHtmlText("Papir", goli, Html.iz(goli, o.second)))
+    }
 }
 
 /**
@@ -686,7 +726,7 @@ private fun TableView(
 
 /**
  * Jedna ćelija. Drži svoj kursor; tekst dolazi iz txt-a. Razmaci na kraju i prazni redovi na
- * kraju ćelije se ne čuvaju u datoteci (SPEC.md, 3.2), pa se uspoređuje normalizirano.
+ * kraju ćelije se ne čuvaju u datoteci (STANDARD.md, 4), pa se uspoređuje normalizirano.
  */
 @Composable
 private fun CellEditor(

@@ -77,9 +77,20 @@ class OblikTest {
     }
 
     @Test
-    fun nepoznatKljucZnaciObicanTekst() {
-        val sirovo = primjer("nepoznat-kljuc.txt")
-        assertEquals(sirovo, Oblik.citaj(sirovo).tekst)
+    fun novijiKljucSeCitaIZadrzava() {
+        val sirovo = primjer("noviji-kljuc.txt").replace("\r\n", "\n")
+        val p = Oblik.citaj(sirovo)
+        assertEquals("ODLIČNO", p.tekst)
+        assertEquals(2, p.format)
+        assertEquals(B, p.stilovi[0])
+        // nedirano: zapisuje se doslovno, s istim brojem
+        assertEquals(sirovo, Oblik.zapisi(p.tekst, p.stilovi, p.linije, p.kljuc, p.format).sirovo)
+        // ni bez ijednog oblikovanja ključ novijeg formata ne nestaje: u papiru mogu biti nepoznate oznake
+        val goli = Oblik.zapisi("nepoznato", List(9) { Stil.OBICNO }, kljuc = true, format = 2).sirovo
+        assertEquals("nepoznato\n\n─── papir 2 ───", goli)
+        // pisač nikad ne smanjuje broj
+        assertEquals("▐a▌\n\n─── papir 7 ───", Oblik.zapisi("a", listOf(B), format = 7).sirovo)
+        assertEquals("▐a▌\n\n─── papir 1 ───", Oblik.zapisi("a", listOf(B), format = 0).sirovo)
     }
 
     @Test
@@ -103,7 +114,16 @@ class OblikTest {
         assertEquals("a", Oblik.tijelo("a\n\n$k\n"))
         assertEquals("a\n", Oblik.tijelo("a\n\n\n$k"))
         assertEquals("", Oblik.tijelo(k))
-        assertNull(Oblik.tijelo("a\n\n─── papir 2 ───"))
+        assertEquals("a", Oblik.tijelo("a\n\n─── papir 2 ───"))
+        assertEquals(1, Oblik.format("a\n\n$k"))
+        assertEquals(12, Oblik.format("a\n\n─── papir 12 ───\n"))
+        assertEquals(0, Oblik.format("a"))
+        assertNull(Oblik.tijelo("a\n\n─── papir 0 ───"))
+        assertNull(Oblik.tijelo("a\n\n─── papir 01 ───"))
+        assertNull(Oblik.tijelo("a\n\n─── papir -1 ───"))
+        assertNull(Oblik.tijelo("a\n\n─── papir  1 ───"))
+        assertNull(Oblik.tijelo("a\n\n─── papir 1a ───"))
+        assertNull(Oblik.tijelo("a\n\n─── Papir 1 ───"))
         assertNull(Oblik.tijelo("a\n\n--- papir 1 ---"))
         assertNull(Oblik.tijelo("a $k"))
         assertNull(Oblik.tijelo("$k\nb"))

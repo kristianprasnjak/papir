@@ -1,7 +1,7 @@
 package hr.papir
 
 /**
- * Tablica (SPEC.md, 3.2): širine stupaca i tekst svake ćelije.
+ * Tablica (STANDARD.md, 4): širine stupaca i tekst svake ćelije.
  *
  * [sirine] su širine sadržaja (bez razmaka uz zidove); [retci] su retci tablice, svaki s tekstom
  * po stupcu (redovi unutar ćelije odvojeni s \n).

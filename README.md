@@ -2,14 +2,14 @@
 
 Prazan papir za mobitel. Otvoriš, pišeš, zatvoriš.
 
-Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zauvijek otvara u bilo kojem programu za tekst, uključujući stari Windows Notepad. Format je otvoren i opisan u [SPEC.md](SPEC.md).
+Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zauvijek otvara u bilo kojem programu za tekst, uključujući stari Windows Notepad. Format je otvoren i opisan u [STANDARD.md](STANDARD.md); aplikacija u [PAPIR.md](PAPIR.md).
 
 ## Verzija 0.6: tablice
 
 - **Tablica** u popisu funkcija (**+**) ubacuje praznu tablicu sa zaglavljem
 - u aplikaciji tablica ima prave linije i ćelije; dodirneš ćeliju i pišeš, Enter u ćeliji je novi red
 - kad tekst ne stane, stupac se proširi u cijeloj tablici; sam se nikad ne sužava
-- tablica nacrtana u Notepadu prepoznaje se ako je točno nacrtana i papir ima ključ ([SPEC.md, 3.2](SPEC.md))
+- tablica nacrtana u Notepadu prepoznaje se ako je točno nacrtana i papir ima ključ ([STANDARD.md, 4](STANDARD.md))
 - u ćeliji se zasad samo piše (oblikovanje, datum, dodavanje redaka i stupaca dolaze kasnije)
 
 U Notepadu:
@@ -29,7 +29,7 @@ U Notepadu:
 
 ## Verzija 0.5: format 1
 
-Oblikovanje koje se i u Notepadu „vidi" (vidi [SPEC.md, 3.1](SPEC.md)). Znakovi se upisuju Alt kodovima, pa ih na mobitelu nitko ne može upisati slučajno; u aplikaciji se nikad ne prikazuju.
+Oblikovanje koje se i u Notepadu „vidi" (vidi [STANDARD.md, 3](STANDARD.md)). Znakovi se upisuju Alt kodovima, pa ih na mobitelu nitko ne može upisati slučajno; u aplikaciji se nikad ne prikazuju.
 
 - u popisu funkcija (**+**): **B** podebljano, *I* kurziv, veličine **XS S M L XL** (M je zadana)
 - B i I djeluju na odabrani tekst, ili na ono što upravo počinješ pisati; veličina je svojstvo retka i djeluje na cijele retke
