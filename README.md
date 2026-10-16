@@ -4,6 +4,29 @@ Prazan papir za mobitel. Otvoriš, pišeš, zatvoriš.
 
 Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zauvijek otvara u bilo kojem programu za tekst, uključujući stari Windows Notepad. Format je otvoren i opisan u [SPEC.md](SPEC.md).
 
+## Verzija 0.6: tablice
+
+- **Tablica** u popisu funkcija (**+**) ubacuje praznu tablicu sa zaglavljem
+- u aplikaciji tablica ima prave linije i ćelije; dodirneš ćeliju i pišeš, Enter u ćeliji je novi red
+- kad tekst ne stane, stupac se proširi u cijeloj tablici; sam se nikad ne sužava
+- tablica nacrtana u Notepadu prepoznaje se ako je točno nacrtana i papir ima ključ ([SPEC.md, 3.2](SPEC.md))
+- u ćeliji se zasad samo piše (oblikovanje, datum, dodavanje redaka i stupaca dolaze kasnije)
+
+U Notepadu:
+
+```
+┌───────────────┬────────┬─────┐
+│ Vježba        │ Serije │ Kg  │
+╞═══════════════╪════════╪═════╡
+│ Čučanj        │ 4x8    │ 80  │
+├───────────────┼────────┼─────┤
+│ Mrtvo dizanje │ 3x5    │ 100 │
+│               │ 3x3    │ 110 │
+└───────────────┴────────┴─────┘
+
+─── papir 1 ───
+```
+
 ## Verzija 0.5: format 1
 
 Oblikovanje koje se i u Notepadu „vidi" (vidi [SPEC.md, 3.1](SPEC.md)). Znakovi se upisuju Alt kodovima, pa ih na mobitelu nitko ne može upisati slučajno; u aplikaciji se nikad ne prikazuju.

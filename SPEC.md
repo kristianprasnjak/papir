@@ -74,7 +74,7 @@ Vrste:
 | 3 | Datum i vrijeme | unos | običan tekst, fiksne širine: `09:05 14.10.2026.` | u aplikaciji od 0.2 (ne dira format) |
 | 4 | Slika | živa | blok omeđen znakom `♠` (U+2660), razmaci čuvaju mjesto, u sredini ime slike | OTVORENO: točan uzorak |
 | 5 | 2D raspored | živa | kutije na mreži znakova; otok u papiru ili cijela bilješka | OTVORENO |
-| 6 | Tablica | živa | stupci poravnati razmacima; samo drži, nikad ne računa | OTVORENO |
+| 6 | Tablica i okvir | živa | zidovi `┌ ┬ ┐ │ ├ ┼ ┤ └ ┴ ┘ ─`, zaglavlje `╞ ═ ╪ ╡`; samo drži, nikad ne računa (vidi 3.2) | format 1, od 0.6 |
 | 7 | Poveznica | živa | oznaka + cilj (druga bilješka ili web adresa) | OTVORENO |
 | 8 | Oblikovanje | živa | `▐…▌` `‹…›`, crte `═`/`─` ispod naslova, `░`/`░░` (vidi 3.1) | format 1, od 0.5 |
 
@@ -142,6 +142,56 @@ Sve izmiješati i ostaviti ‹pola sata› da odstoji.
 Ogledne datoteke: [`primjeri/`](primjeri/).
 
 *Napomena: oznake iz verzije 0.4 (`{*}`, `{papir 1}`…) nisu dio formata. Napuštene su prije nego što je format zamrznut; datoteka s njima čita se kao običan tekst.*
+
+### 3.2 Tablica i okvir (format 1)
+
+Tablica je nacrtana zidovima od tankih linija, a unutra je tekst. Okvir je tablica s jednom ćelijom. U Notepadu izgleda točno kao u aplikaciji.
+
+```
+┌───────────────┬────────┬─────┐
+│ Vježba        │ Serije │ Kg  │
+╞═══════════════╪════════╪═════╡
+│ Čučanj        │ 4x8    │ 80  │
+├───────────────┼────────┼─────┤
+│ Mrtvo dizanje │ 3x5    │ 100 │
+│               │ 3x3    │ 110 │
+└───────────────┴────────┴─────┘
+```
+
+| Znak | Alt kod | | Znak | Alt kod |
+|---|---|---|---|---|
+| `┌` | Alt+218 | | `├` | Alt+195 |
+| `┬` | Alt+194 | | `┼` | Alt+197 |
+| `┐` | Alt+191 | | `┤` | Alt+180 |
+| `└` | Alt+192 | | `╞` | Alt+198 |
+| `┴` | Alt+193 | | `═` | Alt+205 |
+| `┘` | Alt+217 | | `╪` | Alt+216 |
+| `─` | Alt+196 | | `╡` | Alt+181 |
+| `│` | Alt+179 | | | |
+
+**Oblik** (sve u broju znakova kako ih broji Notepad, tj. kodnim točkama):
+
+- **Vrh:** `┌`, za svaki stupac niz `─`, stupci odvojeni s `┬`, na kraju `┐`. Duljine nizova određuju stupce; svaki je dug barem 3.
+- **Redak sadržaja:** `│` na točno istim mjestima kao `┌`, `┬` i `┐` na vrhu. Između zidova: razmak, tekst, dopuna razmacima, razmak.
+- **Crta između redaka tablice:** `├` `─` `┼` `┤` na istim mjestima. Stoji između svaka dva retka tablice.
+- **Zaglavlje:** ako je prva crta `╞` `═` `╪` `╡`, prvi redak tablice je zaglavlje. Smije biti samo prva crta.
+- **Dno:** `└` `─` `┴` `┘`.
+- Redak tablice su svi retci sadržaja između dvije crte; tako ćelija može imati više redova teksta.
+
+**Prepoznavanje je strogo:** tablica postoji samo u datoteci s ključem, i samo ako je svaki njezin redak točno ovakav. Inače su svi ti retci običan tekst, vidljiv kakav jest.
+
+**Ćelija:**
+- Svaki red teksta u ćeliji je pravi red (Enter); aplikacija ga sama ne prelama.
+- Razmaci na kraju reda u ćeliji i prazni redovi na kraju ćelije ne čuvaju se, jer se ne razlikuju od dopune do zida. Sva slova i razmaci ispred njih se čuvaju.
+- Kad tekst ne stane, stupac se proširi u cijeloj tablici. Stupac se nikad sam ne sužava.
+- Oblikovanje unutar ćelija još nije određeno: dotad su `▐ ▌ ‹ ›` u ćeliji obični znakovi.
+- Znak `↓` (Alt+25) uz desni zid ćelije rezerviran je za prijelom nastao sužavanjem stupca (0.8).
+
+**Tablica je živa funkcija:** papir s tablicom ima ključ. Tablica nacrtana u papiru bez ključa ostaje običan tekst dok se papiru ne doda oblikovanje ili tablica iz izbornika.
+
+**Uvijek se čuva:** svaki znak teksta u ćelijama, njihov raspored po recima i stupcima, širina stupaca.
+
+**Smije se saviti:** kako aplikacija crta zidove, razmake i zaglavlje.
 
 ---
 
