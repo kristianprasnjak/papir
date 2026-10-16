@@ -267,23 +267,40 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Tekst jedne ćelije: tablica se iznova nacrta i prepiše u papir (stupac se po potrebi proširi). */
     fun editCell(tablica: Int, red: Int, stupac: Int, celija: String) {
-        if (readOnly) return
-        val raspon = tables.getOrNull(tablica) ?: return
-        val linije = content.text.split("\n")
-        val blok = linije.subList(raspon.first, raspon.last + 1)
-        val t = Tablice.citaj(blok) ?: return
+        val t = table(tablica) ?: return
         val stara = t.retci.getOrNull(red)?.getOrNull(stupac) ?: return
         if (Tablice.normaliziraj(stara) == Tablice.normaliziraj(celija)) return
-        val novi = Tablice.zapisi(t.sa(red, stupac, celija))
-        val noviTekst = Odsjecci.zamijeni(content.text, raspon.first, raspon.last + 1, novi.joinToString("\n"))
-        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), Povratak.jeMalaIzmjena(stara, celija))
+        replaceTable(tablica, Tablice.zapisi(t.sa(red, stupac, celija)).joinToString("\n"), Povratak.jeMalaIzmjena(stara, celija))
+    }
+
+    /** Radnja nad cijelom tablicom (redak, stupac); svaka je jedan korak za poništavanje. */
+    fun editTable(tablica: Int, radnja: (Tablica) -> Tablica?) {
+        val t = table(tablica) ?: return
+        val nova = radnja(t) ?: return
+        replaceTable(tablica, Tablice.zapisi(nova).joinToString("\n"), false)
+    }
+
+    /** Briše cijelu tablicu; na njenom mjestu ostaje prazan redak s kursorom. Može se poništiti. */
+    fun deleteTable(tablica: Int) {
+        if (table(tablica) == null) return
+        replaceTable(tablica, "", false)
+    }
+
+    private fun table(tablica: Int): Tablica? {
+        if (readOnly) return null
+        val raspon = tables.getOrNull(tablica) ?: return null
+        return Tablice.citaj(content.text.split("\n").subList(raspon.first, raspon.last + 1))
+    }
+
+    private fun replaceTable(tablica: Int, novi: String, malaIzmjena: Boolean) {
+        val raspon = tables.getOrNull(tablica) ?: return
+        val noviTekst = Odsjecci.zamijeni(content.text, raspon.first, raspon.last + 1, novi)
+        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), malaIzmjena)
+        val od = Odsjecci.pocetak(noviTekst, raspon.first)
         val st = Oblik.prilagodi(content.text, styles, noviTekst).let { s ->
-            val od = Odsjecci.pocetak(noviTekst, raspon.first)
-            val doo = od + novi.joinToString("\n").length
-            s.mapIndexed { i, x -> if (i in od until doo) Stil.OBICNO else x }
+            s.mapIndexed { i, x -> if (i in od until od + novi.length) Stil.OBICNO else x }
         }
-        val kursor = Odsjecci.pocetak(noviTekst, raspon.first)
-        setModel(TextFieldValue(noviTekst, TextRange(kursor)), st)
+        setModel(TextFieldValue(noviTekst, TextRange(od)), st)
         refreshUndo()
         markDirty()
     }

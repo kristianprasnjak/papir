@@ -17,9 +17,43 @@ data class Tablica(
         },
     )
 
+    /** Prazan redak tablice ispod retka [red]. */
+    fun sRetkomIspod(red: Int): Tablica {
+        val r = red.coerceIn(-1, retci.size - 1)
+        return copy(retci = retci.subList(0, r + 1) + listOf(List(sirine.size) { "" }) + retci.subList(r + 1, retci.size))
+    }
+
+    /** Prazan stupac desno od stupca [stupac], uobičajene širine. */
+    fun sStupcemDesno(stupac: Int): Tablica {
+        val c = stupac.coerceIn(-1, sirine.size - 1)
+        fun <T> umetni(l: List<T>, x: T) = l.subList(0, c + 1) + listOf(x) + l.subList(c + 1, l.size)
+        return copy(sirine = umetni(sirine, SIRINA), retci = retci.map { umetni(it, "") })
+    }
+
+    /**
+     * Bez retka [red]; null ako bi tablica ostala bez redaka (tada se briše cijela tablica).
+     * Brisanjem zaglavlja tablica ostaje bez zaglavlja; sljedeći redak ne postaje zaglavlje sam od sebe.
+     */
+    fun bezRetka(red: Int): Tablica? {
+        if (retci.size <= 1 || red !in retci.indices) return null
+        return copy(retci = retci.filterIndexed { r, _ -> r != red }, zaglavlje = zaglavlje && red != 0)
+    }
+
+    /** Bez stupca [stupac]; null ako bi tablica ostala bez stupaca. */
+    fun bezStupca(stupac: Int): Tablica? {
+        if (sirine.size <= 1 || stupac !in sirine.indices) return null
+        return copy(
+            sirine = sirine.filterIndexed { c, _ -> c != stupac },
+            retci = retci.map { row -> row.filterIndexed { c, _ -> c != stupac } },
+        )
+    }
+
     companion object {
+        /** Širina novog stupca (znakova sadržaja). */
+        const val SIRINA = 8
+
         /** Nova prazna tablica: zaglavlje i jedan redak. */
-        fun nova(stupaca: Int = 2, sirina: Int = 8): Tablica =
+        fun nova(stupaca: Int = 2, sirina: Int = SIRINA): Tablica =
             Tablica(List(stupaca) { sirina }, List(2) { List(stupaca) { "" } }, zaglavlje = true)
     }
 }

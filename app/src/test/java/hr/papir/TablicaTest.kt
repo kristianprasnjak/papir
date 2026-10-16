@@ -170,4 +170,71 @@ class TablicaTest {
             assertEquals("tablica $n: zapis je stabilan", z, Tablice.zapisi(p))
         }
     }
+
+    private val mala = Tablica(listOf(3, 4), listOf(listOf("Što", "Kg"), listOf("a", "80")), zaglavlje = true)
+
+    @Test
+    fun redakIspod() {
+        val t = mala.sRetkomIspod(0)
+        assertEquals(listOf(listOf("Što", "Kg"), listOf("", ""), listOf("a", "80")), t.retci)
+        assertEquals(
+            listOf(
+                "┌─────┬──────┐",
+                "│ Što │ Kg   │",
+                "╞═════╪══════╡",
+                "│     │      │",
+                "├─────┼──────┤",
+                "│ a   │ 80   │",
+                "└─────┴──────┘",
+            ),
+            Tablice.zapisi(t),
+        )
+        assertEquals(3, mala.sRetkomIspod(1).retci.size)
+        assertEquals(listOf("", ""), mala.sRetkomIspod(1).retci.last())
+    }
+
+    @Test
+    fun stupacDesno() {
+        val t = mala.sStupcemDesno(0)
+        assertEquals(listOf(3, Tablica.SIRINA, 4), t.sirine)
+        assertEquals(listOf(listOf("Što", "", "Kg"), listOf("a", "", "80")), t.retci)
+        assertEquals(t, Tablice.citaj(Tablice.zapisi(t)))
+    }
+
+    @Test
+    fun brisanjeRetkaIStupca() {
+        assertEquals(listOf(listOf("Što", "Kg")), mala.bezRetka(1)!!.retci)
+        // brisanjem zaglavlja tablica ostaje bez zaglavlja
+        val bez = mala.bezRetka(0)!!
+        assertEquals(listOf(listOf("a", "80")), bez.retci)
+        assertTrue(!bez.zaglavlje)
+        assertNull(mala.bezRetka(0)!!.bezRetka(0))
+        assertEquals(listOf(listOf("Kg"), listOf("80")), mala.bezStupca(0)!!.retci)
+        assertEquals(listOf(4), mala.bezStupca(0)!!.sirine)
+        assertNull(mala.bezStupca(0)!!.bezStupca(0))
+        assertNull(mala.bezRetka(5))
+    }
+
+    @Test
+    fun nasumicneRadnjeUvijekDajuIspravnuTablicu() {
+        val r = Random(11)
+        val tekstovi = listOf("", "x", "čaj", "a\nb", "dugačak tekst")
+        var t = Tablica.nova()
+        repeat(3000) { n ->
+            val red = r.nextInt(t.retci.size)
+            val stupac = r.nextInt(t.sirine.size)
+            t = when (r.nextInt(5)) {
+                0 -> t.sRetkomIspod(red)
+                1 -> t.sStupcemDesno(stupac)
+                2 -> t.bezRetka(red) ?: t
+                3 -> t.bezStupca(stupac) ?: t
+                else -> t.sa(red, stupac, tekstovi[r.nextInt(tekstovi.size)])
+            }
+            val linije = Tablice.zapisi(t)
+            val procitana = Tablice.citaj(linije)
+            assertEquals("radnja $n", t.retci.map { row -> row.map { Tablice.normaliziraj(it) } }, procitana?.retci)
+            assertEquals("radnja $n: nadji", listOf(0 until linije.size), Tablice.nadji(linije))
+            t = procitana!!
+        }
+    }
 }

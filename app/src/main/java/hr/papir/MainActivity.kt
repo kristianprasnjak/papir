@@ -146,15 +146,18 @@ private fun BottomBar(
     onDateTime: () -> Unit,
     textFunctions: Boolean,
     onTable: () -> Unit,
+    tableShape: Pair<Int, Int>?,
+    onTableAction: (TableAction) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
         if (open && !textFunctions) {
-            Text(
-                "U ćeliji tablice zasad se samo piše.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-            )
+            // U ćeliji: radnje s tablicom. Svaka je jedan korak za ↶.
+            val (retci, stupci) = tableShape ?: (0 to 0)
+            FunctionItem("Novi redak ispod", { onTableAction(TableAction.RowBelow) }, tableShape != null)
+            FunctionItem("Novi stupac desno", { onTableAction(TableAction.ColumnRight) }, tableShape != null)
+            FunctionItem("Obriši redak", { onTableAction(TableAction.DeleteRow) }, retci > 1)
+            FunctionItem("Obriši stupac", { onTableAction(TableAction.DeleteColumn) }, stupci > 1)
+            FunctionItem("Obriši tablicu", { onTableAction(TableAction.DeleteTable) }, tableShape != null)
         }
         if (open && textFunctions) {
             // Oblikovanje: djeluje na odabrani tekst; veličina djeluje na cijele retke.
@@ -250,18 +253,25 @@ private class StilPrikaz(private val stilovi: List<Stil>) : VisualTransformation
     )
 }
 
+/** Radnje s tablicom iz popisa funkcija, dok je kursor u ćeliji. */
+private enum class TableAction { RowBelow, ColumnRight, DeleteRow, DeleteColumn, DeleteTable }
+
 @Composable
-private fun FunctionItem(label: String, onClick: () -> Unit) {
+private fun FunctionItem(label: String, onClick: () -> Unit, enabled: Boolean = true) {
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp),
         horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.38f),
+        )
     }
 }
 
@@ -339,8 +349,39 @@ private fun PapirScreen(vm: PapirViewModel) {
     val odsjecci = remember(linije.size, vm.tables) { Odsjecci.podijeli(linije.size, vm.tables) }
     val requesters = remember(odsjecci.size) { List(odsjecci.size) { FocusRequester() } }
     var focusedCell by remember { mutableStateOf<Any?>(null) }
+    var focusText by remember { mutableStateOf(0) }
+    val cell = focusedCell as? Triple<*, *, *>
+    val cellTable = cell?.first as? Int
+    val tableShape = cellTable?.let { k ->
+        vm.tables.getOrNull(k)?.let { raspon ->
+            Tablice.citaj(linije.subList(raspon.first, raspon.last + 1))?.let { it.retci.size to it.sirine.size }
+        }
+    }
 
-    LaunchedEffect(showPaper, vm.title) {
+    fun onTableAction(a: TableAction) {
+        val k = cellTable ?: return
+        val r = cell?.second as? Int ?: return
+        val c = cell?.third as? Int ?: return
+        val (retci, stupci) = tableShape ?: return
+        when (a) {
+            TableAction.RowBelow -> vm.editTable(k) { it.sRetkomIspod(r) }
+            TableAction.ColumnRight -> vm.editTable(k) { it.sStupcemDesno(c) }
+            TableAction.DeleteRow -> vm.editTable(k) { it.bezRetka(r) }
+            TableAction.DeleteColumn -> vm.editTable(k) { it.bezStupca(c) }
+            TableAction.DeleteTable -> vm.deleteTable(k)
+        }
+        // ako ćelija s kursorom više ne postoji, kursor se vraća u tekst
+        val nestala = a == TableAction.DeleteTable ||
+            (a == TableAction.DeleteRow && r == retci - 1) ||
+            (a == TableAction.DeleteColumn && c == stupci - 1)
+        if (nestala) {
+            focusedCell = null
+            functionsOpen = false
+            focusText++
+        }
+    }
+
+    LaunchedEffect(showPaper, vm.title, focusText) {
         if (showPaper && !vm.readOnly) {
             // kursor u odsječku teksta u kojem je bio; papir bez tablica ima samo jedan
             val kursor = vm.content.selection.start
@@ -459,6 +500,8 @@ private fun PapirScreen(vm: PapirViewModel) {
                     onDateTime = { functionsOpen = false; vm.insertDateTime() },
                     textFunctions = focusedCell == null,
                     onTable = { functionsOpen = false; vm.insertTable() },
+                    tableShape = tableShape,
+                    onTableAction = { onTableAction(it) },
                 )
             }
         }
