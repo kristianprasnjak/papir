@@ -46,6 +46,10 @@ object Oblik {
         val izSirovog: IntArray,
         /** Pročitani retci s izvornim tekstom, da pisač nedirane retke zapiše doslovno. */
         val linije: List<Linija>,
+        /** Retci čistog teksta (uključivo) u kojima su tablice; u čistom tekstu tablica stoji doslovno. */
+        val tablice: List<IntRange> = emptyList(),
+        /** Je li datoteka imala ključ. */
+        val kljuc: Boolean = false,
     )
 
     class Zapisano(
@@ -82,12 +86,34 @@ object Oblik {
         val stilovi = ArrayList<Stil>(body.length)
         val mapa = IntArray(sirovo.length + 1)
         val linije = ArrayList<Linija>()
+        val tablice = Tablice.nadji(redovi)
+        val tabliceCisto = ArrayList<IntRange>()
         var i = 0
         while (i < redovi.size) {
             if (linije.isNotEmpty()) {
                 mapa[pocetci[i] - 1] = sb.length
                 sb.append('\n')
                 stilovi.add(Stil.OBICNO)
+            }
+            val tablica = tablice.firstOrNull { it.first == i }
+            if (tablica != null) {
+                // Tablica stoji u čistom tekstu doslovno; crta je prikaz (SPEC.md, 3.2).
+                val prviRedak = linije.size
+                for (t in tablica) {
+                    if (t > i) {
+                        mapa[pocetci[t] - 1] = sb.length
+                        sb.append('\n')
+                        stilovi.add(Stil.OBICNO)
+                    }
+                    val red = redovi[t]
+                    for (k in red.indices) mapa[pocetci[t] + k] = sb.length + k
+                    sb.append(red)
+                    repeat(red.length) { stilovi.add(Stil.OBICNO) }
+                    linije.add(Linija(red, List(red.length) { Stil.OBICNO }, red))
+                }
+                tabliceCisto.add(prviRedak until linije.size)
+                i = tablica.last + 1
+                continue
             }
             val red = redovi[i]
             val sljedeci = redovi.getOrNull(i + 1)
@@ -127,7 +153,7 @@ object Oblik {
             i += redova
         }
         for (k in body.length..sirovo.length) mapa[k] = sb.length
-        return Procitano(sb.toString(), stilovi, mapa, linije)
+        return Procitano(sb.toString(), stilovi, mapa, linije, tabliceCisto, kljuc = true)
     }
 
     private fun goliTekst(sirovo: String): Procitano = Procitano(
@@ -208,8 +234,17 @@ object Oblik {
      * Retci koji su na početku i na kraju jednaki retcima u [prethodne] (isti tekst i oblikovanje)
      * zapisuju se doslovno kao njihov izvornik; ostali u najkraćem obliku. Tako izmjena jednog
      * retka ne dira nijedan drugi.
+     *
+     * Tablice u čistom tekstu prepoznaju se samo ako papir već ima ključ ([kljuc]) ili oblikovanje,
+     * da tablica nacrtana u golom tekstu ne dobije ključ bez korisnikove odluke (SPEC.md, 3.2).
+     * Prepoznata tablica zapisuje se doslovno i papiru daje ključ.
      */
-    fun zapisi(tekst: String, stilovi: List<Stil>, prethodne: List<Linija> = emptyList()): Zapisano {
+    fun zapisi(
+        tekst: String,
+        stilovi: List<Stil>,
+        prethodne: List<Linija> = emptyList(),
+        kljuc: Boolean = false,
+    ): Zapisano {
         val mapa = IntArray(tekst.length + 1)
         val st = if (stilovi.size == tekst.length) stilovi else List(tekst.length) { Stil.OBICNO }
 
@@ -238,7 +273,12 @@ object Oblik {
             kraj++
         }
 
-        val oblikovano = st.any { !it.obicno } || linije.indices.any { izvor[it] != null && izvor[it] != linije[it] }
+        val imaOblikovanje = st.any { !it.obicno }
+        val uTablici = BooleanArray(linije.size)
+        if (kljuc || imaOblikovanje) for (t in Tablice.nadji(linije)) for (k in t) uTablici[k] = true
+        val imaTablicu = uTablici.any { it }
+        val oblikovano = imaOblikovanje || imaTablicu ||
+            linije.indices.any { izvor[it] != null && izvor[it] != linije[it] }
         if (!oblikovano) {
             for (k in mapa.indices) mapa[k] = k
             return Zapisano(tekst, mapa)
@@ -251,7 +291,7 @@ object Oblik {
                 mapa[off - 1] = sb.length
                 sb.append('\n')
             }
-            val doslovno = izvor[k]
+            val doslovno = if (uTablici[k]) linije[k] else izvor[k]
             if (doslovno != null) {
                 val start = sb.length
                 sb.append(doslovno)
@@ -263,7 +303,7 @@ object Oblik {
         }
         mapa[tekst.length] = sb.length
         // Ako nijedan redak nije dobio nijednu oznaku (npr. „naslov" od samih razmaka), papir je goli tekst.
-        if (sb.length == tekst.length && sb.toString() == tekst) {
+        if (!imaTablicu && sb.length == tekst.length && sb.toString() == tekst) {
             for (k in mapa.indices) mapa[k] = k
             return Zapisano(tekst, mapa)
         }

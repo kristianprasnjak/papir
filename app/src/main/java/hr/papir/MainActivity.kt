@@ -9,6 +9,19 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.runtime.key
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -125,10 +138,20 @@ private fun BottomBar(
     onItalic: () -> Unit,
     onSize: (Int) -> Unit,
     onDateTime: () -> Unit,
+    textFunctions: Boolean,
+    onTable: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
-        if (open) {
-            // Oblikovanje: djeluje na odabrani tekst; veličina bez odabira na cijeli redak.
+        if (open && !textFunctions) {
+            Text(
+                "U ćeliji tablice zasad se samo piše.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+            )
+        }
+        if (open && textFunctions) {
+            // Oblikovanje: djeluje na odabrani tekst; veličina djeluje na cijele retke.
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -144,6 +167,7 @@ private fun BottomBar(
                 }
             }
             FunctionItem("Datum i vrijeme", onDateTime)
+            FunctionItem("Tablica", onTable)
         }
         Row(
             Modifier
@@ -287,7 +311,6 @@ private fun PapirScreen(vm: PapirViewModel) {
     var menuOpen by remember { mutableStateOf(false) }
     var functionsOpen by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<TextFieldValue?>(null) }
-    val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
 
     val openDoc = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -305,9 +328,23 @@ private fun PapirScreen(vm: PapirViewModel) {
 
     val showPaper = vm.loaded && !vm.needsFolder
 
+    val tekst = vm.content.text
+    val linije = remember(tekst) { tekst.split("\n") }
+    val odsjecci = remember(linije.size, vm.tables) { Odsjecci.podijeli(linije.size, vm.tables) }
+    val requesters = remember(odsjecci.size) { List(odsjecci.size) { FocusRequester() } }
+    var focusedCell by remember { mutableStateOf<Any?>(null) }
+
     LaunchedEffect(showPaper, vm.title) {
         if (showPaper && !vm.readOnly) {
-            focus.requestFocus()
+            // kursor u odsječku teksta u kojem je bio; papir bez tablica ima samo jedan
+            val kursor = vm.content.selection.start
+            val indeks = odsjecci.indices.lastOrNull { i ->
+                odsjecci[i].tablica == null && Odsjecci.pocetak(tekst, odsjecci[i].od) <= kursor
+            } ?: odsjecci.lastIndex
+            try {
+                requesters[indeks].requestFocus()
+            } catch (_: IllegalStateException) {
+            }
             keyboard?.show()
         }
     }
@@ -384,30 +421,21 @@ private fun PapirScreen(vm: PapirViewModel) {
 
                 vm.message?.let { MessageLine(it) { vm.message = null } }
 
-                val styles = vm.styles
-                val prikaz = remember(styles) { StilPrikaz(styles) }
-                BasicTextField(
-                    value = vm.content,
-                    onValueChange = vm::onFieldChange,
-                    readOnly = vm.readOnly,
-                    visualTransformation = prikaz,
-                    textStyle = TextStyle(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 17.sp,
-                        // bez fiksne visine retka: veći naslovi (L, XL) dobivaju svoj prostor
-                        color = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    // Ustav: papir ne ispravlja i ne mijenja ono što pišeš.
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.None,
-                        autoCorrectEnabled = false,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 20.dp, vertical = 8.dp)
-                        .focusRequester(focus),
+                Paper(
+                    vm = vm,
+                    linije = linije,
+                    odsjecci = odsjecci,
+                    requesters = requesters,
+                    focusedCell = focusedCell,
+                    onFocusCell = { focusedCell = it },
+                    onTapBelow = {
+                        try {
+                            requesters.last().requestFocus()
+                        } catch (_: IllegalStateException) {
+                        }
+                        keyboard?.show()
+                    },
+                    modifier = Modifier.weight(1f),
                 )
 
                 BottomBar(
@@ -423,6 +451,8 @@ private fun PapirScreen(vm: PapirViewModel) {
                     onItalic = vm::toggleItalic,
                     onSize = vm::setSize,
                     onDateTime = { functionsOpen = false; vm.insertDateTime() },
+                    textFunctions = focusedCell == null,
+                    onTable = { functionsOpen = false; vm.insertTable() },
                 )
             }
         }
@@ -469,5 +499,230 @@ private fun MessageLine(text: String, onDismiss: () -> Unit) {
             .fillMaxWidth()
             .clickable(onClick = onDismiss)
             .padding(horizontal = 20.dp, vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun papirStil(): TextStyle = TextStyle(
+    fontFamily = FontFamily.Monospace,
+    fontSize = 17.sp,
+    // bez fiksne visine retka: veći naslovi (L, XL) dobivaju svoj prostor
+    color = MaterialTheme.colorScheme.onSurface,
+)
+
+/**
+ * Papir kao niz odsječaka: tekst i tablice (ARHITEKTURA.md). Papir bez tablica je jedan
+ * tekstni odsječak, kao i prije. Sve izmjene idu kroz model, koji ih prepiše u txt.
+ */
+@Composable
+private fun Paper(
+    vm: PapirViewModel,
+    linije: List<String>,
+    odsjecci: List<Odsjecak>,
+    requesters: List<FocusRequester>,
+    focusedCell: Any?,
+    onFocusCell: (Any?) -> Unit,
+    onTapBelow: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tekst = vm.content.text
+    Column(
+        modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+    ) {
+        odsjecci.forEachIndexed { i, o ->
+            val tablica = o.tablica
+            if (tablica != null) {
+                key("tablica", tablica) {
+                    val blok = linije.subList(o.od, o.doo)
+                    val t = remember(blok) { Tablice.citaj(blok) }
+                    if (t != null) {
+                        TableView(
+                            t = t,
+                            index = tablica,
+                            enabled = !vm.readOnly,
+                            focusedCell = focusedCell,
+                            onFocusCell = onFocusCell,
+                            onCell = { r, c, celija -> vm.editCell(tablica, r, c, celija) },
+                        )
+                    }
+                }
+            } else {
+                key("tekst", i) {
+                    TextSegment(
+                        vm = vm,
+                        tekst = tekst,
+                        linije = linije,
+                        odsjecak = o,
+                        requester = requesters.getOrNull(i),
+                        onFocused = { onFocusCell(null) },
+                    )
+                }
+            }
+        }
+        // Dodir ispod teksta vodi na kraj papira.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(240.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onTapBelow,
+                ),
+        )
+    }
+}
+
+@Composable
+private fun TextSegment(
+    vm: PapirViewModel,
+    tekst: String,
+    linije: List<String>,
+    odsjecak: Odsjecak,
+    requester: FocusRequester?,
+    onFocused: () -> Unit,
+) {
+    val start = Odsjecci.pocetak(tekst, odsjecak.od)
+    val dio = if (odsjecak.od == odsjecak.doo) "" else linije.subList(odsjecak.od, odsjecak.doo).joinToString("\n")
+    val end = start + dio.length
+    val sel = vm.content.selection
+    val unutra = sel.min >= start && sel.max <= end && !(odsjecak.od == odsjecak.doo && sel.min != start)
+    val lokalno = if (unutra) TextRange(sel.start - start, sel.end - start) else TextRange(dio.length)
+    val comp = vm.content.composition?.takeIf { unutra && it.min >= start && it.max <= end }
+        ?.let { TextRange(it.start - start, it.end - start) }
+    val styles = vm.styles
+    val dijelStilova = remember(styles, start, end) {
+        if (end <= styles.size) styles.subList(start, end).toList() else List(dio.length) { Stil.OBICNO }
+    }
+    val prikaz = remember(dijelStilova) { StilPrikaz(dijelStilova) }
+    BasicTextField(
+        value = TextFieldValue(dio, lokalno, comp),
+        onValueChange = { vm.onSegmentChange(odsjecak.od, odsjecak.doo, it) },
+        readOnly = vm.readOnly,
+        visualTransformation = prikaz,
+        textStyle = papirStil(),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        // Ustav: papir ne ispravlja i ne mijenja ono što pišeš.
+        keyboardOptions = KeyboardOptions(
+            capitalization = KeyboardCapitalization.None,
+            autoCorrectEnabled = false,
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .let { if (requester != null) it.focusRequester(requester) else it }
+            .onFocusChanged { if (it.isFocused) onFocused() },
+    )
+}
+
+/**
+ * Tablica kako je aplikacija crta: prave linije i ćelije. Širine stupaca su iste kao u
+ * datoteci (znakova u fontu jednake širine), pa izgleda isto kao u Notepadu.
+ */
+@Composable
+private fun TableView(
+    t: Tablica,
+    index: Int,
+    enabled: Boolean,
+    focusedCell: Any?,
+    onFocusCell: (Any?) -> Unit,
+    onCell: (Int, Int, String) -> Unit,
+) {
+    val stil = papirStil()
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val znak = remember(stil) { with(density) { measurer.measure("0", stil).size.width.toDp() } }
+    val sirine = t.sirine.map { znak * (it + 2) }
+    val ukupno = sirine.fold(0.dp) { a, b -> a + b }
+    val linija = MaterialTheme.colorScheme.outline
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(vertical = 6.dp),
+    ) {
+        Column(Modifier.border(1.dp, linija)) {
+            t.retci.forEachIndexed { r, row ->
+                if (r > 0) {
+                    Box(
+                        Modifier
+                            .width(ukupno)
+                            .height(if (r == 1 && t.zaglavlje) 3.dp else 1.dp)
+                            .background(linija),
+                    )
+                }
+                Row(
+                    Modifier.drawBehind {
+                        var x = 0f
+                        sirine.dropLast(1).forEach { w ->
+                            x += w.toPx()
+                            drawLine(linija, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
+                        }
+                    },
+                ) {
+                    row.forEachIndexed { c, celija ->
+                        val kljuc = Triple(index, r, c)
+                        CellEditor(
+                            text = celija,
+                            key = kljuc,
+                            width = sirine[c],
+                            padding = znak,
+                            bold = t.zaglavlje && r == 0,
+                            enabled = enabled,
+                            style = stil,
+                            onChange = { onCell(r, c, it) },
+                            onFocus = { fokus ->
+                                if (fokus) onFocusCell(kljuc) else if (focusedCell == kljuc) onFocusCell(null)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Jedna ćelija. Drži svoj kursor; tekst dolazi iz txt-a. Razmaci na kraju i prazni redovi na
+ * kraju ćelije se ne čuvaju u datoteci (SPEC.md, 3.2), pa se uspoređuje normalizirano.
+ */
+@Composable
+private fun CellEditor(
+    text: String,
+    key: Any,
+    width: Dp,
+    padding: Dp,
+    bold: Boolean,
+    enabled: Boolean,
+    style: TextStyle,
+    onChange: (String) -> Unit,
+    onFocus: (Boolean) -> Unit,
+) {
+    var lokalno by remember(key) { mutableStateOf(TextFieldValue(text)) }
+    LaunchedEffect(text) {
+        if (Tablice.normaliziraj(lokalno.text) != Tablice.normaliziraj(text)) {
+            lokalno = TextFieldValue(text, TextRange(text.length))
+        }
+    }
+    BasicTextField(
+        value = lokalno,
+        onValueChange = { v ->
+            val promijenjeno = v.text != lokalno.text
+            lokalno = v
+            if (promijenjeno) onChange(v.text)
+        },
+        readOnly = !enabled,
+        textStyle = if (bold) style.copy(fontWeight = FontWeight.Bold) else style,
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        keyboardOptions = KeyboardOptions(
+            capitalization = KeyboardCapitalization.None,
+            autoCorrectEnabled = false,
+        ),
+        modifier = Modifier
+            .width(width)
+            .padding(horizontal = padding, vertical = 4.dp)
+            .onFocusChanged { onFocus(it.isFocused) },
     )
 }

@@ -91,6 +91,33 @@ class OblikNasumicnoTest {
     }
 
     @Test
+    fun papirSTablicamaNistaNeGubi() {
+        val r = Random(5)
+        repeat(2000) { n ->
+            val (t, st) = nasumicniPapir(r)
+            // ubaci tablicu na nasumičan redak
+            val tablica = Tablice.zapisi(
+                Tablica(listOf(3, 5), listOf(listOf("Što", "Tko"), listOf("ab", "č\nš")), zaglavlje = r.nextBoolean()),
+            )
+            val linije = t.split("\n").toMutableList()
+            val gdje = r.nextInt(linije.size + 1)
+            linije.addAll(gdje, tablica)
+            val tekst = linije.joinToString("\n")
+            val stilovi = Oblik.prilagodi(t, st, tekst).let { s ->
+                // retci tablice su u čistom tekstu obični
+                val od = Odsjecci.pocetak(tekst, gdje)
+                val doo = od + tablica.joinToString("\n").length
+                s.mapIndexed { i, x -> if (i in od until doo) Stil.OBICNO else x }
+            }
+            val z = Oblik.zapisi(tekst, stilovi, kljuc = true)
+            val p = Oblik.citaj(z.sirovo)
+            assertEquals("papir $n: tekst", tekst, p.tekst)
+            assertEquals("papir $n: tablica", listOf(gdje until gdje + tablica.size), p.tablice)
+            assertEquals("papir $n: zapis je stabilan", z.sirovo, Oblik.zapisi(p.tekst, p.stilovi, p.linije, p.kljuc).sirovo)
+        }
+    }
+
+    @Test
     fun izmjenaJednogRetkaNeDiraOstale() {
         val r = Random(3)
         repeat(3000) { n ->

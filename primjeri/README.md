@@ -9,3 +9,4 @@ Svaka datoteka je UTF-8 s Windows krajem retka, točno kakvu je piše Papir. Tes
 | `pokvarena-oznaka.txt` | `▐` bez para, križanje, prazni parovi, crta krive duljine, `░░░`, ponovljeno otvaranje | sve je tekst, osim podebljanog `a` u križanju i `b` u zadnjem retku |
 | `nepoznat-kljuc.txt` | ključ `─── papir 2 ───` | nije ključ formata 1: cijela datoteka je običan tekst |
 | `rucno-pisano.txt` | ispravno, ali ne u najkraćem obliku (`▐Prvi▌▐ redak▌`) | čita se normalno; pri izmjeni drugih redaka ostaje doslovno isti |
+| `tablica.txt` | naslov, tablica sa zaglavljem i ćelijom od dva reda, sitna napomena | tablica s tri stupca i tri retka; „3x5 / 3x3” je jedna ćelija |

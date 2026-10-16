@@ -11,6 +11,7 @@
 | **Čitač** | txt → papir: retci (XL/L naslovi, M, S, XS), unutar njih podebljano i kurziv; sve što ne štima točno ostaje tekst | `Oblik.citaj` |
 | **Pisač** | papir → txt: najmanje oznaka; retke koje nisi dirao zapisuje doslovno kakvi su bili | `Oblik.zapisi` |
 | **Prikaz** | papir → ekran: crta značenje, nikad znakove oznaka; slobodan izbor fonta (jednake širine), mjera i boja | `MainActivity` |
+| **Tablice** | prepoznavanje, čitanje i crtanje tablica (SPEC.md, 3.2); u čistom tekstu tablica stoji doslovno | `Tablica.kt` |
 
 Čitač i pisač su čista logika bez Androida: dobiju tekst, vrate tekst. Zato se mogu iscrpno testirati.
 
@@ -24,6 +25,8 @@
 2. Aplikacija to primijeni na čisti tekst i oblikovanje (`PapirViewModel`).
 3. Pisač iz toga napiše txt.
 4. Čitač iz tog txt-a pročita papir, i **to** se prikazuje (`setModel`).
+
+**Odsječci:** papir se prikazuje kao niz odsječaka, tekst i tablice (`Odsjecci`). Izmjena u tekstnom odsječku prevodi se na cijeli čisti tekst; izmjena u ćeliji iznova nacrta tablicu (`Tablice.zapisi`) i zamijeni njezine retke. Papir bez tablica je jedan tekstni odsječak.
 
 Korak 4 je osigurač: ekran se nikad ne crta iz onoga što aplikacija „misli", nego iz onoga što je stvarno u txt-u. Ako je korisnik upisao nešto što je točno oznaka, ona odmah postaje oznaka, jer bi to bila i pri sljedećem otvaranju.
 
@@ -40,8 +43,8 @@ Spremanje (s provjerom promjene izvana), sukobi i poništavanje rade nad txt-om,
 | Verzija | Što |
 |---|---|
 | 0.5 | Čitač i pisač po retcima, znakovi formata 1, testovi nasumičnim izmjenama |
-| 0.6 | Prepoznavanje i prikaz tablica; tipkanje u ćeliju i širenje stupca |
-| 0.7 | Enter u ćeliji (pravi novi red), dodavanje i brisanje redaka i stupaca |
+| 0.6 | Prepoznavanje i prikaz tablica; tipkanje u ćeliju, Enter u ćeliji, širenje stupca; nova tablica iz izbornika |
+| 0.7 | Dodavanje i brisanje redaka i stupaca, brisanje tablice, datum u ćeliji |
 | 0.8 | Povlačenje zida, prijelomi s `↓`, „Popravi tablicu" |
 
-Dogovoreno za tablice (još nije u SPEC.md): zidovi od tankih linija `┌ ┬ ┐ │ ├ ┼ ┤ └ ┴ ┘ ─`, dvostruka crta `╞ ═ ╪ ╡` ispod zaglavlja, crta između svaka dva retka tablice; Enter u ćeliji je pravi novi red; tipkanje nikad ne prelama nego širi stupac; prelama samo sužavanje stupca, a takav prijelom ima `↓` (Alt+25) uz desni zid ćelije; stupac sa strelicom zadržava širinu koju je postavio korisnik.
+Dogovoreno za tablice (0.6 je u SPEC.md 3.2; ostatak dolazi): zidovi od tankih linija `┌ ┬ ┐ │ ├ ┼ ┤ └ ┴ ┘ ─`, dvostruka crta `╞ ═ ╪ ╡` ispod zaglavlja, crta između svaka dva retka tablice; Enter u ćeliji je pravi novi red; tipkanje nikad ne prelama nego širi stupac; prelama samo sužavanje stupca, a takav prijelom ima `↓` (Alt+25) uz desni zid ćelije; stupac sa strelicom zadržava širinu koju je postavio korisnik.

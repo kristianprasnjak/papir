@@ -72,8 +72,15 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     /** Retci kako su zadnji put pročitani iz txt-a, da pisač nedirane zapiše doslovno (ARHITEKTURA.md). */
     private var lines: List<Oblik.Linija> = emptyList()
 
+    /** Retci čistog teksta u kojima su tablice (SPEC.md, 3.2). */
+    var tables by mutableStateOf<List<IntRange>>(emptyList())
+        private set
+
+    /** Ima li papir ključ: tek tada se tablice prepoznaju i u tekstu koji se piše. */
+    private var keyed = false
+
     /** Tekst kakav ide u datoteku: s oznakama i ključem (SPEC.md, 3.1); bez funkcija goli tekst. */
-    val text: String get() = Oblik.zapisi(content.text, styles, lines).sirovo
+    val text: String get() = Oblik.zapisi(content.text, styles, lines, keyed).sirovo
 
     /** Stil na mjestu kursora (ili prvog odabranog znaka), za prikaz gumba. */
     val currentStyle: Stil
@@ -216,9 +223,11 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
      * (datoteka je istina): ako je u tekstu s oblikovanjem nastala točna oznaka, ona postaje oznaka.
      */
     private fun setModel(value: TextFieldValue, stilovi: List<Stil>) {
-        val zapisano = Oblik.zapisi(value.text, stilovi, lines)
+        val zapisano = Oblik.zapisi(value.text, stilovi, lines, keyed)
         val procitano = Oblik.citaj(zapisano.sirovo)
         lines = procitano.linije
+        tables = procitano.tablice
+        keyed = procitano.kljuc
         if (procitano.tekst == value.text) {
             content = value
             styles = procitano.stilovi
@@ -237,6 +246,64 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     fun redo() {
         if (readOnly) return
         povratak.ponovi(stanje())?.let(::applyState)
+    }
+
+    // --- Odsječci i tablice (SPEC.md, 3.2) ---
+
+    /** Izmjena u tekstnom odsječku (retci [od, doo)) prevodi se na cijeli papir. */
+    fun onSegmentChange(od: Int, doo: Int, value: TextFieldValue) {
+        val tekst = content.text
+        val stari = tekst.split("\n").subList(od, doo).joinToString("\n")
+        val noviTekst = if (value.text == stari) tekst else Odsjecci.zamijeni(tekst, od, doo, value.text)
+        val pomak = Odsjecci.pocetak(noviTekst, od)
+        val sel = TextRange(value.selection.start + pomak, value.selection.end + pomak)
+        val comp = value.composition?.let { TextRange(it.start + pomak, it.end + pomak) }
+        onFieldChange(TextFieldValue(noviTekst, sel, comp))
+    }
+
+    /** Tekst jedne ćelije: tablica se iznova nacrta i prepiše u papir (stupac se po potrebi proširi). */
+    fun editCell(tablica: Int, red: Int, stupac: Int, celija: String) {
+        if (readOnly) return
+        val raspon = tables.getOrNull(tablica) ?: return
+        val linije = content.text.split("\n")
+        val blok = linije.subList(raspon.first, raspon.last + 1)
+        val t = Tablice.citaj(blok) ?: return
+        val stara = t.retci.getOrNull(red)?.getOrNull(stupac) ?: return
+        if (Tablice.normaliziraj(stara) == Tablice.normaliziraj(celija)) return
+        val novi = Tablice.zapisi(t.sa(red, stupac, celija))
+        val noviTekst = Odsjecci.zamijeni(content.text, raspon.first, raspon.last + 1, novi.joinToString("\n"))
+        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), Povratak.jeMalaIzmjena(stara, celija))
+        val st = Oblik.prilagodi(content.text, styles, noviTekst).let { s ->
+            val od = Odsjecci.pocetak(noviTekst, raspon.first)
+            val doo = od + novi.joinToString("\n").length
+            s.mapIndexed { i, x -> if (i in od until doo) Stil.OBICNO else x }
+        }
+        val kursor = Odsjecci.pocetak(noviTekst, raspon.first)
+        setModel(TextFieldValue(noviTekst, TextRange(kursor)), st)
+        refreshUndo()
+        markDirty()
+    }
+
+    /** Nova prazna tablica ispod retka u kojem je kursor. Papir time dobiva ključ. */
+    fun insertTable() {
+        if (readOnly) return
+        val tekst = content.text
+        val redak = tekst.substring(0, content.selection.start.coerceIn(0, tekst.length)).count { it == '\n' }
+        val linije = tekst.split("\n")
+        val tablica = Tablice.zapisi(Tablica.nova()).joinToString("\n")
+        // prazan redak se zamjenjuje tablicom; inače tablica dolazi ispod njega
+        val prazan = linije.getOrNull(redak)?.isEmpty() == true
+        val od = if (prazan) redak else redak + 1
+        val noviTekst = Odsjecci.zamijeni(tekst, od, if (prazan) redak + 1 else od, tablica)
+        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
+        val st = Oblik.prilagodi(tekst, styles, noviTekst).let { s ->
+            val a = Odsjecci.pocetak(noviTekst, od)
+            s.mapIndexed { i, x -> if (i in a until a + tablica.length) Stil.OBICNO else x }
+        }
+        keyed = true
+        setModel(TextFieldValue(noviTekst, TextRange(Odsjecci.pocetak(noviTekst, od))), st)
+        refreshUndo()
+        markDirty()
     }
 
     // --- Funkcije (SPEC.md, 3) ---
@@ -386,6 +453,8 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     private fun applyState(s: Stanje) {
         val p = Oblik.citaj(s.text)
         lines = p.linije
+        tables = p.tablice
+        keyed = p.kljuc
         content = TextFieldValue(p.tekst, TextRange(s.start, s.end))
         styles = p.stilovi
         pendingStyle = null
@@ -411,6 +480,8 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         content = value
         styles = List(value.text.length) { Stil.OBICNO }
         lines = emptyList()
+        tables = emptyList()
+        keyed = false
         pendingStyle = null
         lineEnding = LineEnding.CRLF
         hasBom = false
@@ -600,12 +671,16 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
             content = TextFieldValue(raw)
             styles = List(raw.length) { Stil.OBICNO }
             lines = emptyList()
+            tables = emptyList()
+            keyed = false
             notText = true
             message = "Ovo nije UTF-8 tekst. Otvoreno samo za čitanje."
         } else {
             // Oznake i ključ se ne prikazuju; prikazuje se ono što znače (SPEC.md, 3.1).
             val p = Oblik.citaj(decoded.text)
             lines = p.linije
+            tables = p.tablice
+            keyed = p.kljuc
             content = TextFieldValue(p.tekst, cursor)
             styles = p.stilovi
             lineEnding = decoded.lineEnding
