@@ -5,6 +5,9 @@ package hr.papir
  *
  * [sirine] su širine sadržaja (bez razmaka uz zidove); [retci] su retci tablice, svaki s tekstom
  * po stupcu (redovi unutar ćelije odvojeni s \n).
+ *
+ * Pisaći stroj: stupac je uvijek točno širok koliko njegov najdulji red, s razmacima.
+ * Ništa se ne prelama samo; uži stupac nastaje samo brisanjem ili Enterom.
  */
 data class Tablica(
     val sirine: List<Int>,
@@ -23,11 +26,11 @@ data class Tablica(
         return copy(retci = retci.subList(0, r + 1) + listOf(List(sirine.size) { "" }) + retci.subList(r + 1, retci.size))
     }
 
-    /** Prazan stupac desno od stupca [stupac], uobičajene širine. */
+    /** Prazan stupac desno od stupca [stupac]. */
     fun sStupcemDesno(stupac: Int): Tablica {
         val c = stupac.coerceIn(-1, sirine.size - 1)
         fun <T> umetni(l: List<T>, x: T) = l.subList(0, c + 1) + listOf(x) + l.subList(c + 1, l.size)
-        return copy(sirine = umetni(sirine, SIRINA), retci = retci.map { umetni(it, "") })
+        return copy(sirine = umetni(sirine, 1), retci = retci.map { umetni(it, "") })
     }
 
     /**
@@ -49,12 +52,9 @@ data class Tablica(
     }
 
     companion object {
-        /** Širina novog stupca (znakova sadržaja). */
-        const val SIRINA = 8
-
-        /** Nova prazna tablica: zaglavlje i jedan redak. */
-        fun nova(stupaca: Int = 2, sirina: Int = SIRINA): Tablica =
-            Tablica(List(stupaca) { sirina }, List(2) { List(stupaca) { "" } }, zaglavlje = true)
+        /** Nova prazna tablica: zaglavlje i jedan redak, stupci najmanje širine. */
+        fun nova(stupaca: Int = 2): Tablica =
+            Tablica(List(stupaca) { 1 }, List(2) { List(stupaca) { "" } }, zaglavlje = true)
     }
 }
 
@@ -147,7 +147,26 @@ object Tablice {
         val zadnji = trenutni ?: return null // dno odmah iza crte
         retci.add(zadnji.map { zavrsi(it) })
         val sirine = (0 until zidovi.size - 1).map { zidovi[it + 1] - zidovi[it] - 3 }
-        return Tablica(sirine, retci, zaglavlje)
+        return Tablica(sirine, visak(sirine, retci), zaglavlje)
+    }
+
+    /**
+     * Stupac širi od svog najduljeg reda: višak su razmaci koje je netko upisao, a datoteka ne kaže
+     * u koji red. Pripadaju prvom najduljem redu u stupcu (retci tablice odozgo, unutar ćelije
+     * redovi odozgo), tako da je stupac opet točno širok koliko najdulji red (STANDARD.md, 4).
+     */
+    private fun visak(sirine: List<Int>, retci: List<List<String>>): List<List<String>> {
+        val out = retci.map { it.toMutableList() }
+        for (c in sirine.indices) {
+            val najdulji = retci.maxOf { row -> row[c].split("\n").maxOf { duljina(it) } }
+            if (sirine[c] <= maxOf(najdulji, 1)) continue
+            val r = retci.indices.first { r -> retci[r][c].split("\n").any { duljina(it) == najdulji } }
+            val redovi = retci[r][c].split("\n").toMutableList()
+            val k = redovi.indexOfFirst { duljina(it) == najdulji }
+            redovi[k] = redovi[k] + " ".repeat(sirine[c] - najdulji)
+            out[r][c] = redovi.joinToString("\n")
+        }
+        return out
     }
 
     private fun zavrsi(redovi: List<String>): String = redovi.joinToString("\n").trimEnd('\n')
@@ -155,11 +174,14 @@ object Tablice {
     /** Ćelija kakva se čuva u datoteci: bez razmaka na kraju redova i praznih redova na kraju. */
     fun normaliziraj(tekst: String): String = tekst.split("\n").joinToString("\n") { it.trimEnd() }.trimEnd('\n')
 
-    /** Crta tablicu. Stupac je širok barem koliko je bio, i barem koliko najduži red u njemu. */
+    /**
+     * Crta tablicu. Stupac je točno širok koliko njegov najdulji red, uključujući razmake
+     * (najmanje jedan znak). Prazni redovi na kraju ćelije se ne crtaju.
+     */
     fun zapisi(t: Tablica): List<String> {
-        val celije = t.retci.map { row -> row.map { celija -> celija.split("\n").map { it.trimEnd() } } }
+        val celije = t.retci.map { row -> row.map { celija -> celija.trimEnd('\n').split("\n") } }
         val sirine = t.sirine.indices.map { c ->
-            maxOf(t.sirine[c], 1, celije.maxOfOrNull { row -> row[c].maxOf { duljina(it) } } ?: 0)
+            maxOf(1, celije.maxOfOrNull { row -> row[c].maxOf { duljina(it) } } ?: 0)
         }
         fun crta(lijevo: Char, spoj: Char, desno: Char, znak: Char) =
             lijevo + sirine.joinToString(spoj.toString()) { znak.toString().repeat(it + 2) } + desno

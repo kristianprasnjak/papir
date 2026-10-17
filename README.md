@@ -4,6 +4,14 @@ Prazan papir za mobitel. Otvoriš, pišeš, zatvoriš.
 
 Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zauvijek otvara u bilo kojem programu za tekst, uključujući stari Windows Notepad. Format je otvoren i opisan u [STANDARD.md](STANDARD.md); aplikacija u [PAPIR.md](PAPIR.md).
 
+## Verzija 0.8: tablica kao pisaći stroj
+
+- stupac je uvijek **točno širok koliko njegov najdulji red**, uključujući razmake
+- riječ ili razmak koji ne stane širi stupac; ništa se ne prelama samo od sebe
+- uži stupac: obriši tekst ili razmake, ili Enterom prebaci dio u novi red
+- nema povlačenja zidova ni skrivenih širina: u txt-u su samo slova i razmaci
+- nova tablica počinje s najužim stupcima (u aplikaciji se crtaju malo šire, da se ćelija može dodirnuti)
+
 ## Verzija 0.7: standard
 
 - **standard i aplikacija su odvojeni**: [STANDARD.md](STANDARD.md) opisuje format (što svaki program koji čita ili piše papir mora poštovati), [PAPIR.md](PAPIR.md) aplikaciju
@@ -17,7 +25,7 @@ Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zau
 
 - **Tablica** u popisu funkcija (**+**) ubacuje praznu tablicu sa zaglavljem
 - u aplikaciji tablica ima prave linije i ćelije; dodirneš ćeliju i pišeš, Enter u ćeliji je novi red
-- kad tekst ne stane, stupac se proširi u cijeloj tablici; sam se nikad ne sužava
+- kad tekst ne stane, stupac se proširi u cijeloj tablici (od 0.8 stupac je uvijek točno širok koliko najdulji red)
 - tablica nacrtana u Notepadu prepoznaje se ako je točno nacrtana i papir ima ključ ([STANDARD.md, 4](STANDARD.md))
 - u ćeliji se zasad samo piše (oblikovanje i datum dolaze kasnije; radnje s retcima i stupcima od 0.7)
 
