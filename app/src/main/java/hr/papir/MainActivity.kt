@@ -717,7 +717,8 @@ private fun TableView(
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val znak = remember(stil) { with(density) { measurer.measure("0", stil).size.width.toDp() } }
-    val sirine = t.sirine.map { znak * (it + 2) }
+    // Prikaz smije saviti: vrlo uski stupac crta se malo šire, da se ćelija može dodirnuti.
+    val sirine = t.sirine.map { znak * (maxOf(it, 3) + 2) }
     val ukupno = sirine.fold(0.dp) { a, b -> a + b }
     val linija = MaterialTheme.colorScheme.outline
     Box(

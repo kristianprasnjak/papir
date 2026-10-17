@@ -269,8 +269,10 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     fun editCell(tablica: Int, red: Int, stupac: Int, celija: String) {
         val t = table(tablica) ?: return
         val stara = t.retci.getOrNull(red)?.getOrNull(stupac) ?: return
-        if (Tablice.normaliziraj(stara) == Tablice.normaliziraj(celija)) return
-        replaceTable(tablica, Tablice.zapisi(t.sa(red, stupac, celija)).joinToString("\n"), Povratak.jeMalaIzmjena(stara, celija))
+        // ništa ako se txt ne bi promijenio (npr. razmak na kraju reda koji ne širi stupac)
+        val novi = Tablice.zapisi(t.sa(red, stupac, celija))
+        if (novi == Tablice.zapisi(t)) return
+        replaceTable(tablica, novi.joinToString("\n"), Povratak.jeMalaIzmjena(stara, celija))
     }
 
     /** Radnja nad cijelom tablicom (redak, stupac); svaka je jedan korak za poništavanje. */

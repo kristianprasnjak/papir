@@ -142,16 +142,17 @@ Tablica je nacrtana zidovima od tankih linija, a unutra je tekst. Okvir je tabli
 
 **Prepoznavanje je strogo:** tablica postoji samo u datoteci s ključem, i samo ako je svaki njezin redak točno ovakav. Inače su svi ti retci običan tekst, vidljiv kakav jest.
 
-**Ćelija:**
-- Svaki red teksta u ćeliji je pravi red (Enter); program ga sam ne prelama.
-- Razmaci na kraju reda u ćeliji i prazni redovi na kraju ćelije ne čuvaju se, jer se ne razlikuju od dopune do zida. Sva slova i razmaci ispred njih se čuvaju.
-- Kad tekst ne stane, stupac se proširi u cijeloj tablici. Stupac se nikad sam ne sužava.
+**Ćelija je pisaći stroj:**
+- Svaki red teksta u ćeliji je pravi red (Enter). Ništa se ne prelama samo od sebe.
+- Stupac je **točno širok koliko njegov najdulji red**, uključujući razmake, i najmanje jedan znak. Riječi i razmaci šire stupac u cijeloj tablici; uži postaje samo kad se tekst ili razmaci obrišu ili se dio reda Enterom prebaci u novi red.
+- Nema skrivene širine ni oznake prijeloma: sve što određuje izgled tablice su slova i razmaci.
+- Razmaci na kraju reda koji ne šire stupac ne razlikuju se od dopune do zida, pa se ne čuvaju; isto vrijedi za prazne redove na kraju ćelije. Sva slova i razmaci ispred njih se čuvaju.
+- **Višak širine:** ako je stupac u datoteci širi od svog najduljeg reda (bez razmaka na kraju), višak su razmaci na kraju **prvog najduljeg reda** u stupcu: prvi po retcima tablice odozgo, a unutar ćelije po redovima odozgo. Tako se ručno nacrtana tablica čita bez gubitka, a zapisana se vraća bajt za bajt ista.
 - Oblikovanje unutar ćelija još nije određeno: dotad su `▐ ▌ ‹ ›` u ćeliji obični znakovi.
-- Znak `↓` (Alt+25) uz desni zid ćelije rezerviran je za prijelom nastao sužavanjem stupca; još nije određen.
 
 **Tablica je živa funkcija:** papir s tablicom ima ključ. Tablica nacrtana u papiru bez ključa ostaje običan tekst dok korisnik papiru izričito ne doda funkciju (6.).
 
-**Uvijek se čuva:** svaki znak teksta u ćelijama, njihov raspored po recima i stupcima, širina stupaca.
+**Uvijek se čuva:** svaki znak teksta u ćelijama, njihov raspored po recima i stupcima, širina stupaca (kao razmaci, vidi gore).
 
 **Smije se saviti:** kako program crta zidove, razmake i zaglavlje.
 
@@ -236,6 +237,5 @@ Oznake se ne nalaze na tipkovnicama mobitela. Na računalu se upisuju ovako:
 | `├ ┼ ┤` crta između redaka | U+251C U+253C U+2524 | Alt+195, 197, 180 | | |
 | `╞ ╪ ╡` crta zaglavlja | U+255E U+256A U+2561 | Alt+198, 216, 181 | | |
 | `└ ┴ ┘` dno tablice | U+2514 U+2534 U+2518 | Alt+192, 193, 217 | | |
-| `↓` prijelom (rezervirano) | U+2193 | Alt+25 | Option+2193 | 2193 |
 
 Na macOS-u treba u postavkama tipkovnice uključiti izvor unosa „Unicode Hex Input"; na Linuxu (GTK) Ctrl+Shift+U, zatim heksadecimalni kod i Enter.

@@ -48,6 +48,7 @@ Spremanje (s provjerom promjene izvana), sukobi i poništavanje rade nad txt-om,
 | 0.5 | Čitač i pisač po retcima, znakovi formata 1, testovi nasumičnim izmjenama |
 | 0.6 | Prepoznavanje i prikaz tablica; tipkanje u ćeliju, Enter u ćeliji, širenje stupca; nova tablica iz izbornika |
 | 0.7 | Standard odvojen od aplikacije; ključ s brojem; `Note.pap`; kopiranje u dvije verzije; dodavanje i brisanje redaka i stupaca, brisanje tablice |
-| 0.8 | Povlačenje zida, prijelomi s `↓`, „Popravi tablicu", datum u ćeliji |
+| 0.8 | Tablica kao pisaći stroj: stupac je točno širok koliko najdulji red, s razmacima; bez povlačenja zidova i bez oznake prijeloma |
+| kasnije | „Popravi tablicu", datum u ćeliji, oblikovanje u ćeliji |
 
-Dogovoreno za tablice (format je u STANDARD.md, 4; ostatak dolazi): zidovi od tankih linija `┌ ┬ ┐ │ ├ ┼ ┤ └ ┴ ┘ ─`, dvostruka crta `╞ ═ ╪ ╡` ispod zaglavlja, crta između svaka dva retka tablice; Enter u ćeliji je pravi novi red; tipkanje nikad ne prelama nego širi stupac; prelama samo sužavanje stupca, a takav prijelom ima `↓` (Alt+25) uz desni zid ćelije; stupac sa strelicom zadržava širinu koju je postavio korisnik.
+Dogovoreno za tablice (STANDARD.md, 4): zidovi od tankih linija `┌ ┬ ┐ │ ├ ┼ ┤ └ ┴ ┘ ─`, dvostruka crta `╞ ═ ╪ ╡` ispod zaglavlja, crta između svaka dva retka tablice. Ćelija je pisaći stroj: Enter je jedini prijelom; riječi i razmaci šire stupac, a stupac je uvijek točno širok koliko najdulji red. Povlačenje zidova i oznaka prijeloma `↓` su odbačeni (vlasnik, 0.8): sve je u slovima i razmacima.

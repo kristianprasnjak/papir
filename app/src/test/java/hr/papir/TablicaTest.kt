@@ -51,9 +51,15 @@ class TablicaTest {
     }
 
     @Test
-    fun stupacSeNeSuzavaSam() {
+    fun stupacJeTocnoNajduljiRed() {
+        // kraći tekst: stupac se suzi na najdulji red
         val t = Tablice.citaj(trening)!!.sa(2, 0, "Mrtvo")
-        assertEquals(listOf(13, 6, 3), Tablice.citaj(Tablice.zapisi(t))!!.sirine)
+        assertEquals(listOf(6, 6, 3), Tablice.citaj(Tablice.zapisi(t))!!.sirine)
+        // Enter je jedini način da dugačak red postane uži
+        val z = Tablice.zapisi(Tablice.citaj(trening)!!.sa(2, 0, "Mrtvo\ndizanje"))
+        assertEquals("┌─────────┬────────┬─────┐", z[0])
+        assertEquals("│ Mrtvo   │ 3x5    │ 100 │", z[5])
+        assertEquals("│ dizanje │ 3x3    │ 110 │", z[6])
     }
 
     @Test
@@ -97,11 +103,36 @@ class TablicaTest {
     }
 
     @Test
-    fun razmaciNaKrajuSeNeCuvaju() {
+    fun razmaciSireStupac() {
+        // razmaci koji ne šire stupac nisu ništa drugo nego dopuna do zida
         val t = Tablica.nova().sa(1, 0, "Ana  \nMarko\n\n")
         assertEquals("Ana\nMarko", Tablice.citaj(Tablice.zapisi(t))!!.retci[1][0])
         assertEquals("Ana\nMarko", Tablice.normaliziraj("Ana  \nMarko\n\n"))
         assertEquals("  uvučeno", Tablice.citaj(Tablice.zapisi(Tablica.nova().sa(1, 1, "  uvučeno")))!!.retci[1][1])
+        // razmaci koji šire stupac čuvaju se kao širina, i vraćaju se na isto mjesto
+        val siri = Tablice.zapisi(Tablica.nova().sa(1, 0, "Ana     "))
+        assertEquals("│ Ana      │   │", siri[3])
+        assertEquals("Ana     ", Tablice.citaj(siri)!!.retci[1][0])
+        assertEquals(siri, Tablice.zapisi(Tablice.citaj(siri)!!))
+    }
+
+    @Test
+    fun visakSirinePripadaPrvomNajduljemRedu() {
+        val rukom = listOf(
+            "┌──────────┐",
+            "│ ab       │",
+            "├──────────┤",
+            "│ x        │",
+            "│ cd       │",
+            "└──────────┘",
+        )
+        val t = Tablice.citaj(rukom)!!
+        assertEquals(listOf(listOf("ab      "), listOf("x\ncd")), t.retci)
+        assertEquals(rukom, Tablice.zapisi(t))
+        // nova tablica: prazni stupci najmanje širine, bez viška
+        val nova = Tablice.zapisi(Tablica.nova())
+        assertEquals("┌───┬───┐", nova[0])
+        assertEquals(listOf(listOf("", ""), listOf("", "")), Tablice.citaj(nova)!!.retci)
     }
 
     @Test
@@ -160,14 +191,17 @@ class TablicaTest {
             var t = Tablica(List(stupaca) { 1 + r.nextInt(6) }, List(redaka) { List(stupaca) { "" } }, r.nextBoolean() && redaka > 1)
             repeat(r.nextInt(8)) {
                 val tekst = buildString { repeat(r.nextInt(10)) { append(znakovi[r.nextInt(znakovi.size)]) } }
-                val prije = t.sirine
                 t = Tablice.citaj(Tablice.zapisi(t.sa(r.nextInt(redaka), r.nextInt(stupaca), tekst)))!!
-                for (c in prije.indices) assertTrue("tablica $n: stupac $c se suzio", t.sirine[c] >= prije[c])
             }
             val z = Tablice.zapisi(t)
             val p = Tablice.citaj(z)!!
-            assertEquals("tablica $n", t.retci.map { row -> row.map { Tablice.normaliziraj(it) } }, p.retci)
+            fun norm(x: Tablica) = x.retci.map { row -> row.map { Tablice.normaliziraj(it) } }
+            assertEquals("tablica $n", norm(t), norm(p))
             assertEquals("tablica $n: zapis je stabilan", z, Tablice.zapisi(p))
+            for (c in p.sirine.indices) {
+                val najdulji = p.retci.maxOf { row -> row[c].split("\n").maxOf { it.codePointCount(0, it.length) } }
+                assertEquals("tablica $n: stupac $c je točno najdulji red", maxOf(najdulji, 1), p.sirine[c])
+            }
         }
     }
 
@@ -179,13 +213,13 @@ class TablicaTest {
         assertEquals(listOf(listOf("Što", "Kg"), listOf("", ""), listOf("a", "80")), t.retci)
         assertEquals(
             listOf(
-                "┌─────┬──────┐",
-                "│ Što │ Kg   │",
-                "╞═════╪══════╡",
-                "│     │      │",
-                "├─────┼──────┤",
-                "│ a   │ 80   │",
-                "└─────┴──────┘",
+                "┌─────┬────┐",
+                "│ Što │ Kg │",
+                "╞═════╪════╡",
+                "│     │    │",
+                "├─────┼────┤",
+                "│ a   │ 80 │",
+                "└─────┴────┘",
             ),
             Tablice.zapisi(t),
         )
@@ -196,9 +230,10 @@ class TablicaTest {
     @Test
     fun stupacDesno() {
         val t = mala.sStupcemDesno(0)
-        assertEquals(listOf(3, Tablica.SIRINA, 4), t.sirine)
         assertEquals(listOf(listOf("Što", "", "Kg"), listOf("a", "", "80")), t.retci)
-        assertEquals(t, Tablice.citaj(Tablice.zapisi(t)))
+        val procitana = Tablice.citaj(Tablice.zapisi(t))!!
+        assertEquals(t.retci, procitana.retci)
+        assertEquals(listOf(3, 1, 2), procitana.sirine)
     }
 
     @Test
@@ -210,8 +245,7 @@ class TablicaTest {
         assertTrue(!bez.zaglavlje)
         assertNull(mala.bezRetka(0)!!.bezRetka(0))
         assertEquals(listOf(listOf("Kg"), listOf("80")), mala.bezStupca(0)!!.retci)
-        assertEquals(listOf(4), mala.bezStupca(0)!!.sirine)
-        assertNull(mala.bezStupca(0)!!.bezStupca(0))
+                assertNull(mala.bezStupca(0)!!.bezStupca(0))
         assertNull(mala.bezRetka(5))
     }
 
@@ -232,7 +266,11 @@ class TablicaTest {
             }
             val linije = Tablice.zapisi(t)
             val procitana = Tablice.citaj(linije)
-            assertEquals("radnja $n", t.retci.map { row -> row.map { Tablice.normaliziraj(it) } }, procitana?.retci)
+            assertEquals(
+                "radnja $n",
+                t.retci.map { row -> row.map { Tablice.normaliziraj(it) } },
+                procitana?.retci?.map { row -> row.map { Tablice.normaliziraj(it) } },
+            )
             assertEquals("radnja $n: nadji", listOf(0 until linije.size), Tablice.nadji(linije))
             t = procitana!!
         }
