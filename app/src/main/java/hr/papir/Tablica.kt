@@ -20,6 +20,31 @@ data class Tablica(
         },
     )
 
+    /**
+     * Tekst ćelije kako ga je korisnik upisao. [prije] je tekst koji je ćelija imala na ekranu:
+     * ako je u njemu bilo više razmaka na kraju nego što ih datoteka pripisuje toj ćeliji, višak
+     * širine stupca je njezin (datoteka to ne može reći), pa se uzima od ostalih ćelija u stupcu.
+     * Tako brisanje razmaka uvijek suzi stupac.
+     */
+    fun saUpisanim(red: Int, stupac: Int, prije: String, tekst: String): Tablica {
+        val uDatoteci = retci.getOrNull(red)?.getOrNull(stupac) ?: return this
+        val baza = if (razmaciNaKraju(prije) > razmaciNaKraju(uDatoteci)) {
+            copy(
+                retci = retci.mapIndexed { r, row ->
+                    row.mapIndexed { c, celija ->
+                        if (c != stupac || r == red) celija else celija.split("\n").joinToString("\n") { it.trimEnd() }
+                    }
+                },
+            )
+        } else {
+            this
+        }
+        return baza.sa(red, stupac, tekst)
+    }
+
+    private fun razmaciNaKraju(celija: String): Int =
+        celija.split("\n").sumOf { it.length - it.trimEnd().length }
+
     /** Prazan redak tablice ispod retka [red]. */
     fun sRetkomIspod(red: Int): Tablica {
         val r = red.coerceIn(-1, retci.size - 1)
