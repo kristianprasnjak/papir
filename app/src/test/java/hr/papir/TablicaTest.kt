@@ -275,4 +275,22 @@ class TablicaTest {
             t = procitana!!
         }
     }
+
+    @Test
+    fun brisanjeRazmakaUvijekSuzuje() {
+        // „Kg" i „80" su jednako dugi; razmak upisan iza „80" datoteka pripisuje prvom, „Kg"
+        val prazna = Tablica(listOf(1), listOf(listOf("Kg"), listOf("80")), zaglavlje = true)
+        val s = Tablice.citaj(Tablice.zapisi(prazna.saUpisanim(1, 0, "80", "80 ")))!!
+        assertEquals(listOf(3), s.sirine)
+        assertEquals(listOf(listOf("Kg "), listOf("80")), s.retci)
+        // ćelija na ekranu i dalje pokazuje „80 "; kad se razmak obriše, stupac se suzi
+        val z = Tablice.zapisi(s.saUpisanim(1, 0, "80 ", "80"))
+        assertEquals("┌────┐", z[0])
+        // a brisanje u ćeliji koja nije imala razmak ne dira tuđu širinu
+        assertEquals(listOf(3), Tablice.citaj(Tablice.zapisi(s.saUpisanim(1, 0, "80", "8")))!!.sirine)
+        assertEquals("│ 8   │", Tablice.zapisi(s.saUpisanim(1, 0, "80", "8"))[3])
+        // sve obrisano: stupac je širok jedan razmak
+        val nista = Tablica(listOf(1), listOf(listOf(""), listOf("")), zaglavlje = false)
+        assertEquals("│   │", Tablice.zapisi(nista.saUpisanim(0, 0, "a", ""))[1])
+    }
 }

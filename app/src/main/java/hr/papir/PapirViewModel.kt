@@ -266,11 +266,11 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Tekst jedne ćelije: tablica se iznova nacrta i prepiše u papir (stupac se po potrebi proširi). */
-    fun editCell(tablica: Int, red: Int, stupac: Int, celija: String) {
+    fun editCell(tablica: Int, red: Int, stupac: Int, prije: String, celija: String) {
         val t = table(tablica) ?: return
         val stara = t.retci.getOrNull(red)?.getOrNull(stupac) ?: return
         // ništa ako se txt ne bi promijenio (npr. razmak na kraju reda koji ne širi stupac)
-        val novi = Tablice.zapisi(t.sa(red, stupac, celija))
+        val novi = Tablice.zapisi(t.saUpisanim(red, stupac, prije, celija))
         if (novi == Tablice.zapisi(t)) return
         replaceTable(tablica, novi.joinToString("\n"), Povratak.jeMalaIzmjena(stara, celija))
     }

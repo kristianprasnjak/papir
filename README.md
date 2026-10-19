@@ -10,7 +10,8 @@ Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zau
 - riječ ili razmak koji ne stane širi stupac; ništa se ne prelama samo od sebe
 - uži stupac: obriši tekst ili razmake, ili Enterom prebaci dio u novi red
 - nema povlačenja zidova ni skrivenih širina: u txt-u su samo slova i razmaci
-- nova tablica počinje s najužim stupcima (u aplikaciji se crtaju malo šire, da se ćelija može dodirnuti)
+- prazan stupac širok je jedan razmak; nova tablica počinje tako
+- u aplikaciji je tablica uvijek točno široka kao u Notepadu, znak za znak (od 0.8.1)
 
 ## Verzija 0.7: standard
 

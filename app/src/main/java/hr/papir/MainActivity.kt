@@ -594,7 +594,7 @@ private fun Paper(
                             enabled = !vm.readOnly,
                             focusedCell = focusedCell,
                             onFocusCell = onFocusCell,
-                            onCell = { r, c, celija -> vm.editCell(tablica, r, c, celija) },
+                            onCell = { r, c, prije, celija -> vm.editCell(tablica, r, c, prije, celija) },
                         )
                     }
                 }
@@ -711,14 +711,14 @@ private fun TableView(
     enabled: Boolean,
     focusedCell: Any?,
     onFocusCell: (Any?) -> Unit,
-    onCell: (Int, Int, String) -> Unit,
+    onCell: (Int, Int, String, String) -> Unit,
 ) {
     val stil = papirStil()
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val znak = remember(stil) { with(density) { measurer.measure("0", stil).size.width.toDp() } }
-    // Prikaz smije saviti: vrlo uski stupac crta se malo šire, da se ćelija može dodirnuti.
-    val sirine = t.sirine.map { znak * (maxOf(it, 3) + 2) }
+    // Stupac na ekranu je točno širok kao u datoteci: koliko znakova i razmaka, najmanje jedan.
+    val sirine = t.sirine.map { znak * (maxOf(it, 1) + 2) }
     val ukupno = sirine.fold(0.dp) { a, b -> a + b }
     val linija = MaterialTheme.colorScheme.outline
     Box(
@@ -756,7 +756,7 @@ private fun TableView(
                             bold = t.zaglavlje && r == 0,
                             enabled = enabled,
                             style = stil,
-                            onChange = { onCell(r, c, it) },
+                            onChange = { prije, novo -> onCell(r, c, prije, novo) },
                             onFocus = { fokus ->
                                 if (fokus) onFocusCell(kljuc) else if (focusedCell == kljuc) onFocusCell(null)
                             },
@@ -781,7 +781,7 @@ private fun CellEditor(
     bold: Boolean,
     enabled: Boolean,
     style: TextStyle,
-    onChange: (String) -> Unit,
+    onChange: (String, String) -> Unit,
     onFocus: (Boolean) -> Unit,
 ) {
     var lokalno by remember(key) { mutableStateOf(TextFieldValue(text)) }
@@ -793,9 +793,9 @@ private fun CellEditor(
     BasicTextField(
         value = lokalno,
         onValueChange = { v ->
-            val promijenjeno = v.text != lokalno.text
+            val prije = lokalno.text
             lokalno = v
-            if (promijenjeno) onChange(v.text)
+            if (v.text != prije) onChange(prije, v.text)
         },
         readOnly = !enabled,
         textStyle = if (bold) style.copy(fontWeight = FontWeight.Bold) else style,
