@@ -14,7 +14,8 @@ class OblikNasumicnoTest {
     private val obicniZnakovi = "ab čšž 12*/-()[]{}#=_.:".toCharArray()
 
     /** Znakovi formata, za nasumične „rukom pisane" datoteke. */
-    private val znakoviFormata = "ab ▐▌‹›═─░\n".toCharArray()
+    private val znakoviFormata = "ab ▐▌‹›═─░→←│□■►▼╔╗╚╝║╒╕╘╛\n".toCharArray()
+    private val ciljevi = listOf("Torta.pap", "https://pekara.hr", "x")
 
     private fun nasumicniPapir(r: Random): Pair<String, List<Stil>> {
         val redovi = r.nextInt(6)
@@ -25,10 +26,11 @@ class OblikNasumicnoTest {
                 sb.append('\n')
                 st.add(Stil.OBICNO)
             }
-            val velicina = if (r.nextInt(3) == 0) r.nextInt(5) - 2 else 0
+            val velicina = if (r.nextInt(3) == 0) r.nextInt(3) else 0
             repeat(r.nextInt(12)) {
                 sb.append(obicniZnakovi[r.nextInt(obicniZnakovi.size)])
-                st.add(Stil(r.nextInt(4) == 0, r.nextInt(5) == 0, velicina))
+                val pov = if (r.nextInt(6) == 0) ciljevi[r.nextInt(ciljevi.size)] else null
+                st.add(Stil(r.nextInt(4) == 0, r.nextInt(5) == 0, velicina, pov))
             }
         }
         return sb.toString() to st
@@ -43,7 +45,7 @@ class OblikNasumicnoTest {
         var off = 0
         for (linija in t.split("\n")) {
             val v = if (linija.isEmpty()) 0 else st[off].velicina
-            val bezOznaka = (off until off + linija.length).none { st[it].podebljano || st[it].kurziv }
+            val bezOznaka = (off until off + linija.length).none { st[it].podebljano || st[it].kurziv || st[it].poveznica != null }
             val ispravna = if (v > 0 && linija.isBlank() && bezOznaka) 0 else v
             for (k in off until off + linija.length) out[k] = out[k].copy(velicina = ispravna)
             off += linija.length + 1

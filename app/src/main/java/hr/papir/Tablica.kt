@@ -233,20 +233,23 @@ object Tablice {
 }
 
 /**
- * Dio papira kakav se prikazuje: tekst ili tablica. [od] i [doo] su retci čistog teksta
- * ([od] uključivo, [doo] isključivo). Tekstni odsječak može biti prazan (od == doo):
- * mjesto ispred, između ili iza tablica gdje se može početi pisati.
+ * Dio papira kakav se prikazuje: tekst, tablica ili skriveni sadržaj zatvorene mape.
+ * [od] i [doo] su retci čistog teksta ([od] uključivo, [doo] isključivo). Tekstni odsječak može
+ * biti prazan (od == doo): mjesto ispred, između ili iza tablica gdje se može početi pisati.
  */
-data class Odsjecak(val od: Int, val doo: Int, val tablica: Int?)
+data class Odsjecak(val od: Int, val doo: Int, val tablica: Int?, val skriveno: Boolean = false)
 
 object Odsjecci {
-    fun podijeli(brojRedaka: Int, tablice: List<IntRange>): List<Odsjecak> {
+    fun podijeli(brojRedaka: Int, tablice: List<IntRange>, skriveni: List<IntRange> = emptyList()): List<Odsjecak> {
+        val blokovi = (tablice.mapIndexed { k, t -> Triple(t, k, false) } +
+            skriveni.filter { s -> tablice.none { t -> t.first <= s.last && s.first <= t.last } }.map { Triple(it, -1, true) })
+            .sortedBy { it.first.first }
         val out = ArrayList<Odsjecak>()
         var redak = 0
-        for ((k, t) in tablice.withIndex()) {
-            out.add(Odsjecak(redak, t.first, null))
-            out.add(Odsjecak(t.first, t.last + 1, k))
-            redak = t.last + 1
+        for ((r, k, skriven) in blokovi) {
+            if (!skriven || redak < r.first) out.add(Odsjecak(redak, r.first, null))
+            out.add(Odsjecak(r.first, r.last + 1, if (skriven) null else k, skriven))
+            redak = r.last + 1
         }
         out.add(Odsjecak(redak, brojRedaka, null))
         return out
