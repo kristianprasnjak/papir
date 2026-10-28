@@ -800,6 +800,11 @@ private fun Paper(
     val znak = remember(stil) { measurer.measure("0", stil).size.width.toFloat() }
     val density = LocalDensity.current
 
+    // skriveni i nestali retci nemaju mjesto na ekranu (objekti u njima se ne crtaju)
+    LaunchedEffect(vm.hidden, linije.size) {
+        polozaji.keys.filter { l -> l >= linije.size || vm.hidden.any { l in it } }.forEach { polozaji.remove(it) }
+    }
+
     // traženje: nađeni tekst se dovodi na ekran
     LaunchedEffect(vm.currentMatch, vm.matches) {
         val m = vm.matches.getOrNull(vm.currentMatch) ?: return@LaunchedEffect
@@ -891,9 +896,13 @@ private fun rowSpan(vm: PapirViewModel, polozaji: Polozaji, redak: Int): Pair<Fl
 private fun Objects(vm: PapirViewModel, polozaji: Polozaji, znak: Float, density: androidx.compose.ui.unit.Density) {
     val linija = MaterialTheme.colorScheme.outline
     val izabranaBoja = MaterialTheme.colorScheme.primary
-    for (o in vm.objects) {
-        val gore = rowSpan(vm, polozaji, o.redak) ?: continue
-        val dolje = rowSpan(vm, polozaji, o.zadnjiRedak) ?: continue
+    // objekt u skrivenom sadržaju mape se ne crta
+    val vidljivi = vm.objects.mapNotNull { o ->
+        val gore = rowSpan(vm, polozaji, o.redak)
+        val dolje = rowSpan(vm, polozaji, o.zadnjiRedak)
+        if (gore == null || dolje == null) null else Triple(o, gore, dolje)
+    }
+    for ((o, gore, dolje) in vidljivi) {
         val x = o.stupac * znak
         val w = o.sirina * znak
         val h = dolje.second - gore.first
