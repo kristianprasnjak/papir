@@ -79,11 +79,59 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     /** Ima li papir ključ: tek tada se tablice prepoznaju i u tekstu koji se piše. */
     private var keyed = false
 
-    /** Broj formata iz ključa (0 bez ključa); noviji od poznatog se čuva (STANDARD.md, 7). */
+    /** Broj formata iz ključa (0 bez ključa); noviji od poznatog se čuva (STANDARD.md, 8). */
     private var format = 0
 
+    /** Slike i kutije na mreži (STANDARD.md, 6 i 7). */
+    var objects by mutableStateOf<List<Objekt>>(emptyList())
+        private set
+
+    /** Retci s objektima kako su zadnji put pročitani, da se nedirani zapišu doslovno. */
+    private var mreza: Oblik.Mreza? = null
+
+    /** Retci čistog teksta skriveni u zatvorenim mapama. */
+    var hidden by mutableStateOf<List<IntRange>>(emptyList())
+        private set
+
+    /** Razmaci koje prikaz umeće u čisti tekst da tekst teče desno od objekta: pozicija → širina. */
+    var gaps by mutableStateOf<Map<Int, Int>>(emptyMap())
+        private set
+
+    /** Papir je paket (.pzp): zip s tekstom i slikama (STANDARD.md, 2.3). */
+    var isPackage by mutableStateOf(false)
+        private set
+
+    /** Prilozi u paketu (slike i ostalo), ime → bajtovi. */
+    var attachments by mutableStateOf<Map<String, ByteArray>>(emptyMap())
+        private set
+
+    /** Obrisane slike ostaju ovdje dok je papir otvoren, da ih poništavanje može vratiti. */
+    private val removedAttachments = HashMap<String, ByteArray>()
+    private var packageTextName: String? = null
+    private var convertToPackage = false
+
+    /** Izabrana slika ili kutija; [ghost] je njezin novi položaj ili veličina dok se ne potvrdi. */
+    var selected by mutableStateOf<Objekt?>(null)
+        private set
+    var ghost by mutableStateOf<Objekt?>(null)
+        private set
+    var ghostMode by mutableStateOf(GhostMode.MOVE)
+        private set
+
+    enum class GhostMode { MOVE, SIZE }
+
+    var searchQuery by mutableStateOf("")
+        private set
+    var matchCase by mutableStateOf(false)
+        private set
+    var matches by mutableStateOf<List<IntRange>>(emptyList())
+        private set
+    var currentMatch by mutableStateOf(-1)
+        private set
+
+
     /** Tekst kakav ide u datoteku: s oznakama i ključem (STANDARD.md, 3); bez funkcija goli tekst. */
-    val text: String get() = Oblik.zapisi(content.text, styles, lines, keyed, format).sirovo
+    val text: String get() = Oblik.zapisi(content.text, styles, lines, keyed, format, objects, mreza).sirovo
 
     /** Stil na mjestu kursora (ili prvog odabranog znaka), za prikaz gumba. */
     val currentStyle: Stil
@@ -225,21 +273,69 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
      * Postavlja tekst i stilove tako da su uvijek ono što bi se pročitalo iz datoteke
      * (datoteka je istina): ako je u tekstu s oblikovanjem nastala točna oznaka, ona postaje oznaka.
      */
-    private fun setModel(value: TextFieldValue, stilovi: List<Stil>) {
-        val zapisano = Oblik.zapisi(value.text, stilovi, lines, keyed, format)
+    private fun setModel(value: TextFieldValue, stilovi: List<Stil>, noviObjekti: List<Objekt> = objects) {
+        val zapisano = Oblik.zapisi(value.text, stilovi, lines, keyed, format, noviObjekti, mreza)
         val procitano = Oblik.citaj(zapisano.sirovo)
-        lines = procitano.linije
-        tables = procitano.tablice
-        keyed = procitano.kljuc
-        format = procitano.format
         if (procitano.tekst == value.text) {
             content = value
-            styles = procitano.stilovi
         } else {
             fun map(i: Int) = procitano.izSirovog[zapisano.uSirovo[i.coerceIn(0, value.text.length)]]
             content = TextFieldValue(procitano.tekst, TextRange(map(value.selection.start), map(value.selection.end)))
-            styles = procitano.stilovi
         }
+        takeRead(zapisano.sirovo, procitano)
+        refreshSearch()
+    }
+
+    /** Sve što se izvodi iz pročitanog txt-a: datoteka je istina. */
+    private fun takeRead(sirovo: String, p: Oblik.Procitano) {
+        lines = p.linije
+        tables = p.tablice
+        keyed = p.kljuc
+        format = p.format
+        styles = p.stilovi
+        objects = p.objekti
+        mreza = p.mreza
+        hidden = if (p.kljuc) Mape.skriveni(p.tekst.split("\n")) else emptyList()
+        gaps = computeGaps(sirovo, p)
+        selected = selected?.let { s -> p.objekti.firstOrNull { it == s } }
+        if (selected == null) ghost = null
+    }
+
+    /**
+     * Gdje tekst teče desno od objekta, prikaz umeće razmake da nastavak stoji desno od njega,
+     * kao u Notepadu. Čisti tekst se ne mijenja.
+     */
+    private fun computeGaps(sirovo: String, p: Oblik.Procitano): Map<Int, Int> {
+        if (p.objekti.isEmpty()) return emptyMap()
+        val tijelo = Oblik.tijelo(sirovo) ?: return emptyMap()
+        val retci = tijelo.split("\n")
+        val pocetci = IntArray(retci.size)
+        var o = 0
+        for (k in retci.indices) {
+            pocetci[k] = o
+            o += retci[k].length + 1
+        }
+        val out = HashMap<Int, Int>()
+        val umetnuto = HashMap<Int, Int>() // po retku čistog teksta
+        for (r in retci.indices) {
+            val red = retci[r].codePoints().toArray()
+            val uRetku = p.objekti.filter { r in it.redak..it.zadnjiRedak }.sortedBy { it.stupac }
+            for (ob in uRetku) {
+                val nastavak = (ob.zadnjiStupac + 1 until red.size).any { x ->
+                    red[x] != ' '.code && uRetku.none { x in it.stupac..it.zadnjiStupac }
+                }
+                if (!nastavak) continue
+                val utf16 = retci[r].offsetByCodePoints(0, ob.stupac)
+                val cisto = p.izSirovog[pocetci[r] + utf16]
+                val pocetakLinije = p.tekst.lastIndexOf('\n', cisto - 1) + 1
+                val vec = umetnuto[pocetakLinije] ?: 0
+                val sirina = ob.zadnjiStupac + 1 - (cisto - pocetakLinije + vec)
+                if (sirina <= 0) continue
+                out[cisto] = (out[cisto] ?: 0) + sirina
+                umetnuto[pocetakLinije] = vec + sirina
+            }
+        }
+        return out
     }
 
     fun undo() {
@@ -341,6 +437,402 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         onFieldChange(TextFieldValue(novi, TextRange(kursor)))
     }
 
+    // --- Kvačice i mape (STANDARD.md, 5.2 i 5.3) ---
+
+    /**
+     * Dodir na □ ■ ► ▼ na početku retka mijenja taj znak u datoteci. Vraća true ako je promijenjen.
+     * Bez ključa su to obična slova.
+     */
+    fun toggleAt(pozicija: Int): Boolean {
+        if (readOnly || !keyed) return false
+        val tekst = content.text
+        val p = listOf(pozicija, pozicija - 1).firstOrNull { Mape.prebaci(tekst, it) != null } ?: return false
+        val novi = Mape.prebaci(tekst, p)!!
+        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
+        // zatvorena mapa: kursor iz skrivenog sadržaja ide na kraj zaglavlja
+        var kursor = content.selection
+        val retci = novi.split("\n")
+        val redak = novi.substring(0, p).count { it == '\n' }
+        val sadrzaj = Mape.sadrzaj(retci, redak)
+        if (novi[p] == Mape.ZATVORENO && !sadrzaj.isEmpty()) {
+            val od = Odsjecci.pocetak(novi, sadrzaj.first)
+            val doo = Odsjecci.pocetak(novi, sadrzaj.last + 1)
+            if (kursor.min in od..doo) {
+                val kraj = od - 1
+                kursor = TextRange(kraj)
+            }
+        }
+        setModel(TextFieldValue(novi, kursor), styles)
+        refreshUndo()
+        markDirty()
+        return true
+    }
+
+    /** Kvačica □ na početku retka s kursorom (iza uvlake). Papir time dobiva ključ. */
+    fun insertCheckbox() = insertLineMarker(Mape.PRAZNO)
+
+    /** Mapa ▼ na početku retka s kursorom: redak postaje zaglavlje, uvučeni retci ispod sadržaj. */
+    fun insertFolder() = insertLineMarker(Mape.OTVORENO)
+
+    private fun insertLineMarker(znak: Char) {
+        if (readOnly) return
+        val tekst = content.text
+        val c = content.selection.min.coerceIn(0, tekst.length)
+        val pocetak = tekst.lastIndexOf('\n', c - 1) + 1
+        val kraj = tekst.indexOf('\n', c).let { if (it < 0) tekst.length else it }
+        val redak = tekst.substring(pocetak, kraj)
+        if (Mape.jeKvacica(redak) || Mape.zaglavlje(redak) != null) return
+        val gdje = pocetak + Mape.uvlaka(redak)
+        val novi = tekst.substring(0, gdje) + znak + " " + tekst.substring(gdje)
+        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
+        keyed = true
+        val st = Oblik.prilagodi(tekst, styles, novi, Stil.OBICNO)
+        setModel(TextFieldValue(novi, TextRange(c + 2)), st)
+        refreshUndo()
+        markDirty()
+    }
+
+    // --- Poveznica (STANDARD.md, 5.4) ---
+
+    /** Cilj poveznice na mjestu kursora (u njoj, na početku ili na kraju), ili null. */
+    val linkAtCursor: String?
+        get() {
+            val c = content.selection.min
+            return styles.getOrNull(c)?.poveznica ?: styles.getOrNull(c - 1)?.poveznica
+        }
+
+    /** Odabrani tekst, za prijedlog teksta poveznice. */
+    val selectedText: String get() = content.text.substring(content.selection.min, content.selection.max)
+
+    /** Umeće poveznicu umjesto odabranog teksta (ili na kursor). */
+    fun insertLink(tekst: String, cilj: String) {
+        if (readOnly) return
+        val t = tekst.replace('\n', ' ')
+        val c = cilj.trim()
+        if (t.isEmpty() || !Oblik.ispravanCilj(c)) {
+            message = "Poveznica treba tekst i cilj (bez znakova → ← │)."
+            return
+        }
+        val stari = content.text
+        val a = content.selection.min
+        val b = content.selection.max
+        val novi = stari.substring(0, a) + t + stari.substring(b)
+        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
+        val baza = styles.getOrElse(a) { Stil.OBICNO }.copy(poveznica = null)
+        val st = Oblik.prilagodi(stari, styles, novi).toMutableList()
+        for (i in a until a + t.length) st[i] = baza.copy(poveznica = c, velicina = st[i].velicina)
+        setModel(TextFieldValue(novi, TextRange(a + t.length)), st)
+        refreshUndo()
+        markDirty()
+    }
+
+    /** Uklanja poveznicu na mjestu kursora; tekst ostaje. */
+    fun removeLink() {
+        if (readOnly) return
+        val cilj = linkAtCursor ?: return
+        var a = content.selection.min
+        var b = a
+        while (a > 0 && styles.getOrNull(a - 1)?.poveznica == cilj) a--
+        while (b < styles.size && styles[b].poveznica == cilj) b++
+        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
+        setModel(content, Oblik.primijeni(content.text, styles, a, b) { it.copy(poveznica = null) })
+        refreshUndo()
+        markDirty()
+    }
+
+    /** Papir iz mape za papire s točno tim imenom; null ako ga nema. */
+    fun openPaperByName(ime: String) = op {
+        val dir = folder
+        val uri = if (dir == null) null else io { findInFolder(dir, ime) }
+        if (uri == null) {
+            message = "Papir „$ime“ nije pronađen u mapi za papire."
+            return@op
+        }
+        if (!saveBeforeLeaving()) return@op
+        if (!load(uri)) message = "Datoteku nije moguće otvoriti."
+    }
+
+    private fun findInFolder(tree: Uri, ime: String): Uri? = try {
+        val djeca = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+        resolver.query(
+            djeca,
+            arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+            null, null, null,
+        )?.use { c ->
+            var nadjeno: Uri? = null
+            while (c.moveToNext()) {
+                if (c.getString(1) == ime) {
+                    nadjeno = DocumentsContract.buildDocumentUriUsingTree(tree, c.getString(0))
+                    break
+                }
+            }
+            nadjeno
+        }
+    } catch (e: Exception) {
+        null
+    }
+
+    // --- Slike i kutije (STANDARD.md, 6 i 7) ---
+
+    /** Retci tijela bez objekata, kako ih vidi pravilo slobodnog mjesta. */
+    private fun flowRows(): List<String> {
+        val z = Oblik.zapisi(content.text, styles, lines, keyed, format).sirovo
+        return (Oblik.tijelo(z) ?: z).split("\n")
+    }
+
+    /** Redak mreže (tijelo datoteke) u kojem počinje redak čistog teksta. */
+    fun rawRowOfLine(linija: Int): Int = lines.take(linija).sumOf { it.izvor.count { c -> c == '\n' } + 1 }
+
+    /** Redak čistog teksta kojem pripada redak mreže. */
+    fun lineOfRawRow(redak: Int): Int {
+        var r = 0
+        for ((i, l) in lines.withIndex()) {
+            r += l.izvor.count { it == '\n' } + 1
+            if (redak < r) return i
+        }
+        return maxOf(0, lines.size - 1 + (redak - r + 1))
+    }
+
+    /** Prvo slobodno mjesto za objekt, od retka ispod kursora nadolje, uz lijevi rub. */
+    private fun placeFree(o: Objekt): Objekt {
+        val retci = flowRows()
+        val kursor = content.text.substring(0, content.selection.min.coerceIn(0, content.text.length)).count { it == '\n' }
+        val od = rawRowOfLine(kursor) + 1
+        for (r in od..retci.size + 1) {
+            val kandidat = o.na(r, 0)
+            if (Objekti.slobodno(kandidat, retci, objects)) return kandidat
+        }
+        return o.na(retci.size + 1, 0)
+    }
+
+    private fun applyObjects(novi: List<Objekt>, izabrani: Objekt?) {
+        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
+        keyed = true
+        selected = izabrani
+        setModel(content, styles, novi)
+        selected = izabrani?.let { s -> objects.firstOrNull { it == s } }
+        refreshUndo()
+        markDirty()
+    }
+
+    /** Nova slika iz galerije: ulazi u paket, a okvir na prvo slobodno mjesto ispod kursora. */
+    fun insertImage(uri: Uri) = op {
+        if (readOnly) return@op
+        val bajtovi = io { read(uri) } ?: run {
+            message = "Sliku nije moguće pročitati."
+            return@op
+        }
+        val ime = Paket.slobodnoIme(io { displayName(uri) }, attachments.keys + removedAttachments.keys)
+        val (w, h) = io { imageSize(bajtovi) }
+        val sirina = 24
+        // znak je otprilike dvaput viši nego širok
+        val visina = if (w > 0 && h > 0) (sirina * h / (2.0 * w)).toInt().coerceIn(3, 30) else 8
+        attachments = LinkedHashMap(attachments).also { it[ime] = bajtovi }
+        if (!isPackage) {
+            isPackage = true
+            convertToPackage = target != null
+        }
+        val o = placeFree(Objekt.slika(0, 0, sirina, visina, ime))
+        applyObjects(objects + o, o)
+    }
+
+    private fun imageSize(b: ByteArray): Pair<Int, Int> {
+        val o = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size, o)
+        return o.outWidth to o.outHeight
+    }
+
+    /** Nova prazna kutija teksta na prvo slobodno mjesto ispod kursora. */
+    fun insertBox() {
+        if (readOnly) return
+        val o = placeFree(Objekt.kutija(0, 0, ""))
+        applyObjects(objects + o, o)
+    }
+
+    fun select(o: Objekt?) {
+        selected = o
+        ghost = null
+    }
+
+    /** Počinje pomicanje ili mijenjanje veličine; ništa se ne mijenja dok se ne potvrdi. */
+    fun startGhost(mode: GhostMode) {
+        val s = selected ?: return
+        ghostMode = mode
+        ghost = s
+    }
+
+    /** Strelica: pomak za jedan znak ili redak (ili promjena širine i visine). */
+    fun nudge(dx: Int, dy: Int) {
+        val g = ghost ?: return
+        ghost = when (ghostMode) {
+            GhostMode.MOVE -> g.na(maxOf(0, g.redak + dy), maxOf(0, g.stupac + dx))
+            GhostMode.SIZE -> Objekt.slika(g.redak, g.stupac, g.sirina + dx, g.visina + dy, g.sadrzaj)
+        }
+    }
+
+    /** Je li novi položaj dopušten: slika ne smije stati na tekst ni na drugi objekt. */
+    val ghostFree: Boolean
+        get() {
+            val g = ghost ?: return false
+            val s = selected ?: return false
+            return Objekti.slobodno(g, flowRows(), objects - s)
+        }
+
+    fun confirmGhost() {
+        val g = ghost ?: return
+        val s = selected ?: return
+        if (g == s) {
+            ghost = null
+            return
+        }
+        if (!ghostFree) {
+            message = "Tu je tekst ili drugi objekt. Pomakni dalje."
+            return
+        }
+        ghost = null
+        applyObjects(objects.map { if (it == s) g else it }, g)
+    }
+
+    fun cancelGhost() {
+        ghost = null
+    }
+
+    fun deleteSelected() {
+        val s = selected ?: return
+        if (s.vrsta == Objekt.Vrsta.SLIKA && objects.count { it.sadrzaj == s.sadrzaj && it.vrsta == s.vrsta } == 1) {
+            attachments[s.sadrzaj]?.let { removedAttachments[s.sadrzaj] = it }
+            attachments = LinkedHashMap(attachments).also { it.remove(s.sadrzaj) }
+        }
+        ghost = null
+        applyObjects(objects - s, null)
+    }
+
+    /** Novo ime slike: mijenja se i u okviru i u paketu. */
+    fun renameImage(novo: String) {
+        val s = selected ?: return
+        if (s.vrsta != Objekt.Vrsta.SLIKA) return
+        val ime = novo.trim()
+        if (ime.isEmpty() || ime == s.sadrzaj) return
+        if (ime.any { it == '/' || it == '\\' || it == '\n' } || ime.endsWith(".pap", true) || ime.endsWith(".txt", true)) {
+            message = "To ime ne može biti ime slike."
+            return
+        }
+        if (ime in attachments.keys) {
+            message = "Slika s tim imenom već postoji u papiru."
+            return
+        }
+        val bajtovi = attachments[s.sadrzaj]
+        attachments = LinkedHashMap<String, ByteArray>().also { m ->
+            for ((k, v) in attachments) m[if (k == s.sadrzaj) ime else k] = v
+            if (bajtovi == null) removedAttachments[s.sadrzaj]?.let { m[ime] = it }
+        }
+        val o = Objekt.slika(s.redak, s.stupac, s.sirina, s.visina, ime)
+        applyObjects(objects.map { if (it == s) o else it }, o)
+    }
+
+    /** Tekst u kutiji: kutija je široka koliko njezin najdulji red, kao ćelija. */
+    fun editBox(kutija: Objekt, tekst: String) {
+        if (readOnly) return
+        val o = Objekt.kutija(kutija.redak, kutija.stupac, tekst)
+        if (o == kutija) return
+        val bio = objects.firstOrNull { it == kutija } ?: return
+        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), Povratak.jeMalaIzmjena(bio.sadrzaj, tekst))
+        selected = o
+        setModel(content, styles, objects.map { if (it == bio) o else it })
+        selected = objects.firstOrNull { it == o }
+        refreshUndo()
+        markDirty()
+    }
+
+    private fun restoreAttachments() {
+        val potrebno = objects.filter { it.vrsta == Objekt.Vrsta.SLIKA }.map { it.sadrzaj }
+        val nedostaje = potrebno.filter { it !in attachments && it in removedAttachments }
+        if (nedostaje.isNotEmpty()) {
+            attachments = LinkedHashMap(attachments).also { m -> for (n in nedostaje) m[n] = removedAttachments.getValue(n) }
+        }
+    }
+
+    // --- Traži i zamijeni (PAPIR.md, 5) ---
+
+    /** Dijelovi teksta koji se ne pretražuju: tablice i sadržaj zatvorenih mapa. */
+    private fun excludedRanges(): List<IntRange> {
+        val t = content.text
+        return (tables + hidden).map { r -> Odsjecci.pocetak(t, r.first) until Odsjecci.pocetak(t, r.last + 1) }
+    }
+
+    fun search(upit: String, velikaMala: Boolean = matchCase) {
+        searchQuery = upit
+        matchCase = velikaMala
+        refreshSearch()
+        currentMatch = matches.indexOfFirst { it.first >= content.selection.min }.let { if (it < 0 && matches.isNotEmpty()) 0 else it }
+        showMatch()
+    }
+
+    private fun refreshSearch() {
+        if (searchQuery.isEmpty()) {
+            matches = emptyList()
+            currentMatch = -1
+            return
+        }
+        matches = Trazi.nadji(content.text, searchQuery, matchCase, excludedRanges())
+        if (currentMatch >= matches.size) currentMatch = matches.size - 1
+    }
+
+    fun nextMatch(korak: Int) {
+        if (matches.isEmpty()) return
+        currentMatch = ((currentMatch + korak) % matches.size + matches.size) % matches.size
+        showMatch()
+    }
+
+    private fun showMatch() {
+        val m = matches.getOrNull(currentMatch) ?: return
+        content = content.copy(selection = TextRange(m.first, m.last + 1))
+    }
+
+    fun replaceCurrent(novo: String) {
+        if (readOnly) return
+        val m = matches.getOrNull(currentMatch) ?: return
+        val stari = content.text
+        val novi = stari.substring(0, m.first) + novo + stari.substring(m.last + 1)
+        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
+        val st = Oblik.prilagodi(stari, styles, novi, styles.getOrNull(m.first))
+        setModel(TextFieldValue(novi, TextRange(m.first + novo.length)), st)
+        currentMatch = matches.indexOfFirst { it.first >= m.first + novo.length }.let { if (it < 0 && matches.isNotEmpty()) 0 else it }
+        showMatch()
+        refreshUndo()
+        markDirty()
+    }
+
+    fun replaceAll(novo: String) {
+        if (readOnly) return
+        val stari = content.text
+        val nadjeno = matches
+        if (nadjeno.isEmpty()) return
+        val sb = StringBuilder()
+        val st = ArrayList<Stil>()
+        var od = 0
+        for (m in nadjeno) {
+            sb.append(stari, od, m.first)
+            st.addAll(styles.subList(od, m.first))
+            val stil = styles.getOrElse(m.first) { Stil.OBICNO }
+            for (c in novo) st.add(if (c == '\n') Stil.OBICNO else stil)
+            sb.append(novo)
+            od = m.last + 1
+        }
+        sb.append(stari, od, stari.length)
+        st.addAll(styles.subList(od, stari.length))
+        povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
+        setModel(TextFieldValue(sb.toString(), TextRange(0)), st)
+        message = "Zamijenjeno: ${nadjeno.size}."
+        refreshUndo()
+        markDirty()
+    }
+
+    fun endSearch() {
+        searchQuery = ""
+        refreshSearch()
+    }
+
     /** Pozvati kad aplikacija ide u pozadinu. */
     fun saveNow() {
         saveJob?.cancel()
@@ -382,7 +874,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     fun loadTheirs() = op {
         val t = theirs ?: return@op
         val uri = target ?: return@op
-        val savedAs = saveConflictCopy(PapirFile.encode(text, lineEnding, hasBom)) ?: return@op
+        val savedAs = saveConflictCopy(currentBytes(text)) ?: return@op
         povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
         theirs = null
         conflict = false
@@ -460,7 +952,9 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         if (actual != newName) message = "Sustav je datoteku nazvao „$actual“."
     }
 
-    fun suggestedName(): String = PapirFile.suggestName(content.text)
+    fun suggestedName(): String = PapirFile.suggestName(content.text).let {
+        if (isPackage) it.substringBeforeLast('.') + Paket.NASTAVAK else it
+    }
 
     // --- Unutarnje ---
 
@@ -475,12 +969,10 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun applyState(s: Stanje) {
         val p = Oblik.citaj(s.text)
-        lines = p.linije
-        tables = p.tablice
-        keyed = p.kljuc
-        format = p.format
         content = TextFieldValue(p.tekst, TextRange(s.start, s.end))
-        styles = p.stilovi
+        takeRead(s.text, p)
+        restoreAttachments()
+        refreshSearch()
         pendingStyle = null
         refreshUndo()
         markDirty()
@@ -507,6 +999,17 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         tables = emptyList()
         keyed = false
         format = 0
+        objects = emptyList()
+        mreza = null
+        hidden = emptyList()
+        gaps = emptyMap()
+        isPackage = false
+        attachments = emptyMap()
+        removedAttachments.clear()
+        packageTextName = null
+        convertToPackage = false
+        selected = null
+        ghost = null
         pendingStyle = null
         lineEnding = LineEnding.CRLF
         hasBom = false
@@ -594,7 +1097,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         if (!dirty) return true
         if (readOnly || conflict) return false
         val snapshot = text
-        val bytes = PapirFile.encode(snapshot, lineEnding, hasBom)
+        val bytes = currentBytes(snapshot)
         val uri = target
 
         val ishod = if (uri == null) {
@@ -606,7 +1109,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
             }
             val created = io {
                 try {
-                    createIn(dir, PapirFile.NEW_NAME)
+                    createIn(dir, if (isPackage) PapirFile.NEW_NAME.substringBeforeLast('.') + Paket.NASTAVAK else PapirFile.NEW_NAME)
                 } catch (e: Exception) {
                     null
                 }
@@ -640,11 +1143,45 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
             Ishod.OK -> {
                 diskBytes = bytes
                 if (text == snapshot) dirty = false
+                if (convertToPackage) renameToPackage()
             }
             Ishod.SUKOB -> conflict = true
             Ishod.GRESKA -> message = "Spremanje nije uspjelo. Tekst je i dalje ovdje."
         }
         return ishod == Ishod.OK
+    }
+
+    /** Bajtovi za datoteku: goli tekst, ili paket s tekstom i slikama. */
+    private fun currentBytes(snapshot: String): ByteArray {
+        val tekst = PapirFile.encode(snapshot, lineEnding, hasBom)
+        if (!isPackage) return tekst
+        val ime = packageTextName ?: ((title?.substringBeforeLast('.') ?: "Note") + ".pap").also { packageTextName = it }
+        return Paket.zapisi(Paket.Sadrzaj(ime, tekst, LinkedHashMap(attachments)))
+    }
+
+    /** Papir koji je dobio prvu sliku postaje .pzp: zip je zip (STANDARD.md, 2.3). */
+    private suspend fun renameToPackage() {
+        convertToPackage = false
+        val uri = target ?: return
+        val ime = title ?: return
+        if (ime.endsWith(Paket.NASTAVAK, ignoreCase = true)) return
+        val novo = (if (ime.contains('.')) ime.substringBeforeLast('.') else ime) + Paket.NASTAVAK
+        val renamed = io {
+            try {
+                DocumentsContract.renameDocument(resolver, uri, novo)
+            } catch (e: Exception) {
+                null
+            }
+        }
+        if (renamed == null) {
+            message = "Papir sa slikama je zip, ali preimenovanje u „$novo“ nije uspjelo."
+            return
+        }
+        if (renamed != uri) persist(renamed)
+        target = renamed
+        title = io { displayName(renamed) }
+        prefs.edit().putString(KEY_TARGET, renamed.toString()).apply()
+        message = "Papir sa slikom sada je paket „$title“."
     }
 
     private fun attempt(write: () -> Unit): Ishod = try {
@@ -690,7 +1227,11 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     private fun applyBytes(bytes: ByteArray, keepCursor: Boolean) {
         // kao Notepad: otvorena datoteka počinje s kursorom na početku
         val cursor = if (keepCursor) content.selection else TextRange.Zero
-        val decoded = PapirFile.decode(bytes)
+        val paket = if (Paket.jePaket(bytes)) Paket.citaj(bytes) else null
+        isPackage = paket != null
+        attachments = paket?.prilozi ?: emptyMap()
+        packageTextName = paket?.imeTeksta
+        val decoded = if (Paket.jePaket(bytes) && paket == null) null else PapirFile.decode(paket?.tekst ?: bytes)
         if (decoded == null) {
             val raw = String(bytes, Charsets.UTF_8)
             content = TextFieldValue(raw)
@@ -699,17 +1240,18 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
             tables = emptyList()
             keyed = false
             format = 0
+            objects = emptyList()
+            mreza = null
+            hidden = emptyList()
+            gaps = emptyMap()
             notText = true
-            message = "Ovo nije UTF-8 tekst. Otvoreno samo za čitanje."
+            message = if (Paket.jePaket(bytes)) "Ovaj zip nije papir. Otvoreno samo za čitanje."
+            else "Ovo nije UTF-8 tekst. Otvoreno samo za čitanje."
         } else {
             // Oznake i ključ se ne prikazuju; prikazuje se ono što znače (STANDARD.md, 3).
             val p = Oblik.citaj(decoded.text)
-            lines = p.linije
-            tables = p.tablice
-            keyed = p.kljuc
-        format = p.format
             content = TextFieldValue(p.tekst, cursor)
-            styles = p.stilovi
+            takeRead(decoded.text, p)
             lineEnding = decoded.lineEnding
             hasBom = decoded.hasBom
             notText = false
