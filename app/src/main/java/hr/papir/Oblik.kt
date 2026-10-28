@@ -3,7 +3,7 @@ package hr.papir
 /**
  * Oblikovanje jednog znaka (STANDARD.md, 3).
  * Podebljano, kurziv i poveznica vrijede za znak; veličina za cijeli redak
- * (0 M zadano, 1 L, 2 XL). [poveznica] je cilj poveznice (STANDARD.md, 5.4) ili null.
+ * (0 M zadano, 1 L, 2 XL). [poveznica] je cilj poveznice (STANDARD.md, 5.3) ili null.
  */
 data class Stil(
     val podebljano: Boolean = false,
@@ -66,7 +66,7 @@ object Oblik {
         val kljuc: Boolean = false,
         /** Broj formata iz ključa; 0 ako ključa nema. */
         val format: Int = 0,
-        /** Slike i kutije na mreži (STANDARD.md, 6 i 7). */
+        /** Slike i kutije na mreži (STANDARD.md, 6). */
         val objekti: List<Objekt> = emptyList(),
         /** Sirovi retci s objektima, da pisač nedirane zapiše doslovno. */
         val mreza: Mreza? = null,
@@ -318,7 +318,7 @@ object Oblik {
      *
      * [format] je broj iz ključa pročitane datoteke. Pisač ga nikad ne smanjuje, a papir novijeg
      * formata uvijek zadržava ključ, jer u njemu mogu biti oznake koje ovaj pisač ne poznaje
-     * (STANDARD.md, 7).
+     * (STANDARD.md, 8).
      */
     fun zapisi(
         tekst: String,

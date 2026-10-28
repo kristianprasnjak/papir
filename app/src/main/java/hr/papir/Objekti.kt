@@ -1,7 +1,7 @@
 package hr.papir
 
 /**
- * Slika ili kutija teksta na točnom mjestu Notepadove mreže (STANDARD.md, 6 i 7).
+ * Slika ili kutija teksta na točnom mjestu Notepadove mreže (STANDARD.md, 6).
  *
  * [redak] je redak tijela datoteke u kojem je gornji rub, [stupac] stupac lijevog ruba
  * (kodne točke, kako broji Notepad), [sirina] i [visina] su vanjske mjere s okvirom.

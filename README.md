@@ -2,7 +2,30 @@
 
 Prazan papir za mobitel. Otvoriš, pišeš, zatvoriš.
 
+Zašto i kako: [MANIFEST.md](MANIFEST.md), pet točaka.
+
 Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zauvijek otvara u bilo kojem programu za tekst, uključujući stari Windows Notepad. Format je otvoren i opisan u [STANDARD.md](STANDARD.md); aplikacija u [PAPIR.md](PAPIR.md).
+
+## Verzija 0.9: sve na papiru
+
+- **manifest** u pet točaka ([MANIFEST.md](MANIFEST.md))
+- **traži i zamijeni** (⋯), kao u Notepadu
+- **kvačica** `□`/`■` i **mapa** `►`/`▼`: jedan dodir na znak, stanje je zapisano u datoteci; sadržaj mape je uvučen, kao stablo u Exploreru
+- **poveznica** `→tekst│cilj←` na drugi papir ili web adresu; otvara se tek gumbom **Otvori**
+- **slike**: papir sa slikom postaje paket `.pzp` (zip); u Notepadu je slika okvir s imenom u sredini, na točnom mjestu; pomiče se strelicama i potvrđuje, nikad na tekst
+- **kutije teksta** na točnom mjestu; tekst koji naleti na sliku ili kutiju nastavlja desno od nje
+- **papir se ne prelama**: dugi retci idu udesno, kao u Notepadu
+- veličine **S i XS su izbačene**; ostaju M, L i XL
+
+```
+Recept za tortu    ╔═════════════╗
+za osam osoba      ║             ║
+                   ║  torta.jpg  ║
+□ 200 g brašna     ║             ║
+■ 4 jaja           ╚═════════════╝
+
+─── papir 1 ───
+```
 
 ## Verzija 0.8: tablica kao pisaći stroj
 

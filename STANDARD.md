@@ -32,11 +32,14 @@ Ključne riječi **MORA**, **NE SMIJE**, **TREBA** i **SMIJE** znače obvezu, za
 
 - Preporučeni nastavak je **`.pap`**. Nije obavezan: papir je papir zbog ključa (2.4), a ne zbog nastavka. `recept.pap`, `recept.txt` i `index.html` s ključem jednako su papiri.
 - Vrsta sadržaja je `text/plain; charset=utf-8`.
+- Papir sa slikama je paket (2.3) s nastavkom **`.pzp`**.
 
 ### 2.3 Goli tekst i paket
 
-- Papir je jedna tekstna datoteka dok god nema priloga.
-- **OTVORENO:** papir s prilozima (npr. slikama) postaje `.zip` s tekstnom datotekom i prilozima; raspored unutar zipa još nije određen.
+- Papir je jedna tekstna datoteka dok god nema slika.
+- **Paket** je papir sa slikama: obična zip arhiva s nastavkom `.pzp`. Zip je zip: otvara ga svaki program za arhive.
+- U korijenu paketa je **točno jedan tekstni papir** (nastavak `.pap`, ili `.txt` ako `.pap` nema) i uz njega slike. Druge stavke u korijenu su prilozi; program ih MORA sačuvati kakve jesu. Podmape se ne koriste.
+- Slika se u papiru navodi imenom stavke u paketu (6.2). Tekstni papir u paketu je papir kao svaki drugi.
 
 ### 2.4 Ključ
 
@@ -61,8 +64,6 @@ Oblikovanje je dvije vrste: **unutar retka** (podebljano, kurziv) i **cijeli red
 | XL (naslov) | redak, ispod njega crta od `═` | `═` U+2550 Alt+205 | dvostruka crta, najjači naglasak |
 | L (podnaslov) | redak, ispod njega crta od `─` | `─` U+2500 Alt+196 | jednostruka crta |
 | M | redak bez ičega | | zadano |
-| S | `░ ` na početku retka | `░` U+2591 Alt+176 | najsvjetlija sjena: tiho |
-| XS | `░░ ` na početku retka | | dvaput tiho |
 
 **Podebljano i kurziv** (unutar jednog retka):
 
@@ -76,15 +77,14 @@ Oblikovanje je dvije vrste: **unutar retka** (podebljano, kurziv) i **cijeli red
 
 - **XL/L:** redak iza kojeg slijedi redak samo od `═` (XL) ili samo od `─` (L), **točno jednako dug** (broj znakova, uključujući znakove podebljanog i kurziva). Redak s naslovom ne smije biti prazan ni sam biti crta. Crta pripada naslovu; program je TREBA prikazati kao veličinu, a ne kao crtu.
 - Ako crta nije točno duga kao redak iznad, ni redak ni crta nisu naslov: oboje je tekst. Tako se i naslov koji netko sam ručno podcrta u Notepadu prepoznaje, ali dugačak razdjelnik nikad.
-- **S:** redak počinje s `░` i razmakom. **XS:** redak počinje s `░░` i razmakom. Razmak pripada oznaci. `░░░ ` nije oznaka.
-- Ako je redak i naslov i počinje s `░ `, vrijedi naslov.
+- Veličine S i XS postojale su u nacrtu (`░ `, `░░ `) i izbačene su prije zamrzavanja formata; `░` je običan znak.
 - Pisač veličinu retka uzima iz prvog znaka u retku; prazan redak je uvijek M.
 
 **Čuvanje nediranog:** pisač mijenja samo retke koji su se promijenili. Redak čiji se tekst i oblikovanje nisu promijenili zapisuje se doslovno kako je bio u datoteci, i kad nije u najkraćem obliku (npr. rukom pisan `▐a▌▐b▌`).
 
 **Uvijek se čuva:** svaki znak teksta, i koji je znak kako oblikovan.
 
-**Smije se saviti:** točan izgled veličina (program bira mjere XS–XL), font (uvijek jednake širine), razmak redaka.
+**Smije se saviti:** točan izgled veličina (program bira mjere M, L i XL), font (uvijek jednake širine), razmak redaka.
 
 Primjer u Notepadu:
 
@@ -96,7 +96,6 @@ Sastojci
 ────────
 200 g brašna, ▐glatkog▌
 Sve izmiješati i ostaviti ‹pola sata› da odstoji.
-░ može i s malo mineralne vode
 
 ─── papir 1 ───
 ```
@@ -150,7 +149,7 @@ Tablica je nacrtana zidovima od tankih linija, a unutra je tekst. Okvir je tabli
 - **Višak širine:** ako je stupac u datoteci širi od svog najduljeg reda (bez razmaka na kraju), višak su razmaci na kraju **prvog najduljeg reda** u stupcu: prvi po retcima tablice odozgo, a unutar ćelije po redovima odozgo. Tako se ručno nacrtana tablica čita bez gubitka, a zapisana se vraća bajt za bajt ista.
 - Oblikovanje unutar ćelija još nije određeno: dotad su `▐ ▌ ‹ ›` u ćeliji obični znakovi.
 
-**Tablica je živa funkcija:** papir s tablicom ima ključ. Tablica nacrtana u papiru bez ključa ostaje običan tekst dok korisnik papiru izričito ne doda funkciju (6.).
+**Tablica je živa funkcija:** papir s tablicom ima ključ. Tablica nacrtana u papiru bez ključa ostaje običan tekst dok korisnik papiru izričito ne doda funkciju (7.).
 
 **Uvijek se čuva:** svaki znak teksta u ćelijama, njihov raspored po recima i stupcima, širina stupaca (kao razmaci, vidi gore).
 
@@ -158,21 +157,62 @@ Tablica je nacrtana zidovima od tankih linija, a unutra je tekst. Okvir je tabli
 
 ## 5. Funkcije
 
-| # | Funkcija | Vrsta | Oblik u datoteci | Status |
+| # | Funkcija | Vrsta | Oblik u datoteci | Gdje |
 |---|---|---|---|---|
-| 0 | Ključ | sistemska | zadnji redak `─── papir N ───` (vidi 2.4) | format 1 |
-| 1 | Skrivanje | živa | početna oznaka s razinom; cjelina traje do sljedeće oznake iste ili niže razine; podrazine | OTVORENO: znak |
-| 2 | Kvačica | živa | `[ ]` / `[x]` | prijedlog |
-| 3 | Datum i vrijeme | unos | običan tekst; format ga ne poznaje | nije oznaka |
-| 4 | Slika | živa | blok omeđen znakom `♠` (U+2660), razmaci čuvaju mjesto, u sredini ime slike | OTVORENO: točan uzorak |
-| 5 | 2D raspored | živa | kutije na mreži znakova; otok u papiru ili cijela bilješka | OTVORENO |
-| 6 | Tablica i okvir | živa | zidovi `┌ ┬ ┐ │ ├ ┼ ┤ └ ┴ ┘ ─`, zaglavlje `╞ ═ ╪ ╡`; samo drži, nikad ne računa (vidi 4.) | format 1 |
-| 7 | Poveznica | živa | oznaka + cilj (druga bilješka ili web adresa) | OTVORENO |
-| 8 | Oblikovanje | živa | `▐…▌` `‹…›`, crte `═`/`─` ispod naslova, `░`/`░░` (vidi 3.) | format 1 |
+| 0 | Ključ | sistemska | zadnji redak `─── papir N ───` | 2.4 |
+| 1 | Oblikovanje | živa | `▐…▌` `‹…›`, crte `═`/`─` ispod naslova | 3 |
+| 2 | Tablica i okvir | živa | zidovi `┌ ┬ ┐ │ ├ ┼ ┤ └ ┴ ┘ ─`, zaglavlje `╞ ═ ╪ ╡`; samo drži, nikad ne računa | 4 |
+| 3 | Kvačica | živa | `□ ` / `■ ` na početku retka | 5.1 |
+| 4 | Mapa (skrivanje) | živa | `► ` / `▼ ` na početku retka; sadržaj je uvučen | 5.2 |
+| 5 | Poveznica | živa | `→tekst│cilj←` | 5.3 |
+| 6 | Slika | živa | okvir `╔═╗ ║ ╚═╝` s imenom slike u sredini, na točnom mjestu mreže | 6.2 |
+| 7 | Kutija teksta | živa | okvir `╒═╕ │ ╘═╛` s tekstom, na točnom mjestu mreže | 6.3 |
+| — | Datum i vrijeme | unos | običan tekst; format ga ne poznaje | — |
 
 Vrste: **unos** upiše običan tekst i zaboravi ga; **živa** je oznaka koja se svaki put ponovno prepoznaje.
 
-Pravila za sve oznake:
+### 5.1 Kvačica
+
+- Redak je kvačica ako počinje (iza uvlake od razmaka) znakom `□` (U+25A1, neoznačeno) ili `■` (U+25A0, Alt+254, označeno) i razmakom.
+- Označavanje mijenja taj jedan znak u datoteci. Stanje je uvijek zapisano i vidi se i u Notepadu.
+
+```
+□ kruh
+■ mlijeko
+□ jaja
+```
+
+### 5.2 Mapa (skrivanje)
+
+- Zaglavlje mape je redak koji (iza uvlake) počinje znakom `►` (U+25BA, Alt+16, zatvorena) ili `▼` (U+25BC, Alt+31, otvorena) i razmakom. Ostatak retka je ime mape.
+- **Sadržaj mape** su svi retci ispod zaglavlja uvučeni više od zaglavlja, zajedno s praznim retcima između njih. Prvi neprazan redak uvučen jednako ili manje završava mapu. Prazni retci na kraju ne pripadaju mapi.
+- Podmapa je zaglavlje unutar sadržaja. Uvlaka je od razmaka; predlaže se dva razmaka po razini, kao stablo u Exploreru.
+- Otvaranje i zatvaranje mijenja taj jedan znak u datoteci: mapa ostaje upisana prema zadnjem stanju. Program sadržaj zatvorene mape ne prikazuje, ali ga nikad ne briše; u Notepadu je uvijek vidljiv.
+
+```
+▼ Kupovina
+  ► Pekara
+    kruh
+  ▼ Tržnica
+    rajčica
+    paprika
+► Posao
+  sastanak u 9
+```
+
+### 5.3 Poveznica
+
+- `→` (U+2192, Alt+26), prikazani tekst, `│` (U+2502, Alt+179), cilj, `←` (U+2190, Alt+27). Sve u jednom retku.
+- Tekst i cilj ne smiju biti prazni i ne smiju sadržavati `→` ni `←`; cilj ne smije sadržavati ni `│`. Inače su znakovi običan tekst.
+- Cilj je ime drugog papira u istoj mapi (npr. `Torta.pap`) ili web adresa (`https://…`). Program prikazuje samo tekst; cilj otvara tek na izričit zahtjev.
+- Znakovi `▐ ▌ ‹ ›` unutar teksta poveznice su obični znakovi; podebljano i kurziv smiju obuhvatiti cijelu poveznicu.
+
+```
+Vidi →recept za tortu│Torta.pap← i →pekaru│https://pekara.hr←.
+```
+
+### 5.4 Pravila za sve oznake
+
 - Aplikacija ne zna tko je što upisao. Funkcija se prepoznaje isključivo po točnom uzorku u tekstu: tko god ga upiše, kroz izbornik ili rukom, dobije funkciju.
 - Uzorak mora biti dovoljno neobičan da se nikad ne pojavi slučajno (npr. `$%&(//ODLIČNO//)&%$`). Jedan običan znak, poput `♠`, sam za sebe nije uzorak.
 - Jedan znak manje i uzorak se raspada: program prikazuje znakove kao običan tekst.
@@ -184,12 +224,54 @@ Pravila za sve oznake:
 
 ---
 
-## 6. Obveze čitača i pisača
+## 6. Slike i kutije teksta
+
+### 6.1 Mreža
+
+- Papir u Notepadu je mreža: retci odozgo, stupci slijeva (kodne točke, kako broji Notepad, bez prelamanja). Slika i kutija stoje na **točnom mjestu mreže**: pamte se redak gornjeg ruba, stupci lijevog i desnog ruba i visina u retcima, a sve je to sam okvir nacrtan u tekstu.
+- **Tekst teče oko njih:** tekst retka puni stupce slijeva nadesno; kad naleti na okvir, nastavlja desno od njega. Ako je tekst kraći, do okvira se dopunjuje razmacima.
+- Čitač zato tekst retka čita kao spoj svih stupaca izvan okvira. U retku s okvirom razmaci na kraju su dopuna i ne čuvaju se.
+- Okvir ne smije sjediti preko drugog okvira. Ako bi se dva okvira preklapala, prvi (odozgo, slijeva) vrijedi, a znakovi drugoga su tekst.
+- Okvir koji seže ispod kraja teksta dodaje prazne retke, da stane.
+- Okviri se prepoznaju samo u papiru s ključem, i samo ako su točno nacrtani.
+
+```
+Recept za tortu    ╔═════════════╗
+za osam osoba      ║             ║
+                   ║  torta.jpg  ║
+200 g brašna, 4 jaj║             ║a, šećer
+                   ╚═════════════╝
+```
+
+Ovdje je četvrti redak teksta „200 g brašna, 4 jaja, šećer": nastavlja desno od slike.
+
+### 6.2 Slika
+
+- Okvir od `╔` (Alt+201), `═` (Alt+205), `╗` (Alt+187), `║` (Alt+186), `╚` (Alt+200), `╝` (Alt+188). Unutra je najmanje jedan redak.
+- Unutar okvira je **točno jedan neprazan redak: ime slike** u paketu (2.3). Pisač ga stavlja u samu sredinu: u srednji redak (gornji od dva srednja), vodoravno na sredinu (lijevo jedan razmak manje ako ne ide točno). Čitač prihvaća ime bilo gdje unutar okvira.
+- Okvir je širok barem koliko ime i po razmak sa svake strane; ako ime ne stane, okvir se širi udesno.
+- Točan omjer slike se ne čuva: vrijede početna točka (gornji lijevi kut) i mjere okvira. Program sliku crta u okviru najbolje što može.
+
+### 6.3 Kutija teksta
+
+- Okvir od `╒` (Alt+213), `═`, `╕` (Alt+184), `│` (Alt+179), `╘` (Alt+212), `╛` (Alt+190).
+- Unutra je tekst kao u ćeliji tablice (4): razmak uz svaki zid, Enter je novi red, ništa se ne prelama samo, a kutija je točno široka koliko njezin najdulji red (najmanje jedan znak). Višak širine pripada prvom najduljem redu.
+
+```
+Popis              ╒═════════════╕
+kruh               │ ne zaboravi │
+mlijeko            │ kartice!    │
+jaja               ╘═════════════╛
+```
+
+---
+
+## 7. Obveze čitača i pisača
 
 **Čitač formata 1:**
 - MORA datoteku bez ključa prikazati kao goli tekst, bez ikakvog tumačenja.
 - MORA prepoznati samo točne uzorke; sve ostalo prikazuje kao tekst, znak po znak.
-- MORA pročitati papir s ključem bilo kojeg broja N (7.).
+- MORA pročitati papir s ključem bilo kojeg broja N (8.).
 
 **Pisač formata 1:**
 - NE SMIJE mijenjati nijedno slovo teksta osim onih koje je korisnik izričito mijenjao.
@@ -197,12 +279,13 @@ Pravila za sve oznake:
 - NE SMIJE dodati ključ ni oznaku bez korisnikove izričite radnje (npr. izbora oblikovanja ili tablice).
 - MORA ukloniti ključ kad u papiru nema nijedne funkcije.
 - NE SMIJE pisati u datoteku ako se ništa nije promijenilo.
-- MORA zadržati broj formata iz ključa ako je veći od njegova (7.).
+- MORA zadržati broj formata iz ključa ako je veći od njegova (8.).
+- MORA u paketu sačuvati sve priloge koje nije izričito obrisao korisnik (2.3).
 - NE SMIJE upisati ništa o načinu nastanka datoteke (1., načelo 4).
 
 ---
 
-## 7. Verzije i proširenje
+## 8. Verzije i proširenje
 
 - **Stariji program prikazuje ono što zna, a ostalo kao tekst.** Čitač formata 1 koji otvori papir s ključem `─── papir 2 ───` prikazuje oznake formata 1, a nepoznate oznake kao obične znakove.
 - **Pravilo proširenja:** svaka nova oznaka u budućem formatu MORA starijem čitaču izgledati kao običan tekst, i nijedan stariji čitač je NE SMIJE pročitati kao nešto drugo. Zato stariji program noviji papir ne kvari: nepoznate oznake su za njega slova, a slova čuva.
@@ -211,7 +294,7 @@ Pravila za sve oznake:
 
 ---
 
-## 8. Trajnost
+## 9. Trajnost
 
 - Uz svaku verziju formata objavljuju se ovaj dokument i ogledne datoteke ([`primjeri/`](primjeri/)).
 - Standard se arhivira izvan ovog repozitorija (npr. Internet Archive, Software Heritage).
@@ -231,11 +314,20 @@ Oznake se ne nalaze na tipkovnicama mobitela. Na računalu se upisuju ovako:
 | `›` kurziv, zatvaranje | U+203A | Alt+0155 | Option+203A | 203a |
 | `═` crta XL | U+2550 | Alt+205 | Option+2550 | 2550 |
 | `─` crta L, ključ, zidovi | U+2500 | Alt+196 | Option+2500 | 2500 |
-| `░` sitno | U+2591 | Alt+176 | Option+2591 | 2591 |
 | `┌ ┬ ┐` vrh tablice | U+250C U+252C U+2510 | Alt+218, 194, 191 | | |
 | `│` zid | U+2502 | Alt+179 | Option+2502 | 2502 |
 | `├ ┼ ┤` crta između redaka | U+251C U+253C U+2524 | Alt+195, 197, 180 | | |
 | `╞ ╪ ╡` crta zaglavlja | U+255E U+256A U+2561 | Alt+198, 216, 181 | | |
 | `└ ┴ ┘` dno tablice | U+2514 U+2534 U+2518 | Alt+192, 193, 217 | | |
+| `□` kvačica, neoznačena | U+25A1 | nema Alt koda u Notepadu; kopirati | Option+25A1 | 25a1 |
+| `■` kvačica, označena | U+25A0 | Alt+254 | Option+25A0 | 25a0 |
+| `►` mapa, zatvorena | U+25BA | Alt+16 | Option+25BA | 25ba |
+| `▼` mapa, otvorena | U+25BC | Alt+31 | Option+25BC | 25bc |
+| `→ ←` poveznica | U+2192 U+2190 | Alt+26, Alt+27 | Option+2192, 2190 | 2192, 2190 |
+| `│` cilj poveznice | U+2502 | Alt+179 | Option+2502 | 2502 |
+| `╔ ╗ ╚ ╝ ║` slika | U+2554 U+2557 U+255A U+255D U+2551 | Alt+201, 187, 200, 188, 186 | | |
+| `╒ ╕ ╘ ╛` kutija | U+2552 U+2555 U+2558 U+255B | Alt+213, 184, 212, 190 | | |
 
 Na macOS-u treba u postavkama tipkovnice uključiti izvor unosa „Unicode Hex Input"; na Linuxu (GTK) Ctrl+Shift+U, zatim heksadecimalni kod i Enter.
+
+Alt kodovi 1–31 (`►` `▼` `→` `←`) na Windowsu daju stare OEM sličice; treba ih jednom provjeriti u Notepadu na kojem se radi.

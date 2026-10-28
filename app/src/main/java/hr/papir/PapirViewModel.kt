@@ -82,7 +82,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     /** Broj formata iz ključa (0 bez ključa); noviji od poznatog se čuva (STANDARD.md, 8). */
     private var format = 0
 
-    /** Slike i kutije na mreži (STANDARD.md, 6 i 7). */
+    /** Slike i kutije na mreži (STANDARD.md, 6). */
     var objects by mutableStateOf<List<Objekt>>(emptyList())
         private set
 
@@ -437,7 +437,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         onFieldChange(TextFieldValue(novi, TextRange(kursor)))
     }
 
-    // --- Kvačice i mape (STANDARD.md, 5.2 i 5.3) ---
+    // --- Kvačice i mape (STANDARD.md, 5.1 i 5.2) ---
 
     /**
      * Dodir na □ ■ ► ▼ na početku retka mijenja taj znak u datoteci. Vraća true ako je promijenjen.
@@ -492,7 +492,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         markDirty()
     }
 
-    // --- Poveznica (STANDARD.md, 5.4) ---
+    // --- Poveznica (STANDARD.md, 5.3) ---
 
     /** Cilj poveznice na mjestu kursora (u njoj, na početku ili na kraju), ili null. */
     val linkAtCursor: String?
@@ -572,7 +572,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         null
     }
 
-    // --- Slike i kutije (STANDARD.md, 6 i 7) ---
+    // --- Slike i kutije (STANDARD.md, 6) ---
 
     /** Retci tijela bez objekata, kako ih vidi pravilo slobodnog mjesta. */
     private fun flowRows(): List<String> {

@@ -1,7 +1,7 @@
 package hr.papir
 
 /**
- * Kvačice i mape (STANDARD.md, 5.2 i 5.3): živi znakovi na početku retka. Dodir mijenja znak
+ * Kvačice i mape (STANDARD.md, 5.1 i 5.2): živi znakovi na početku retka. Dodir mijenja znak
  * u datoteci, pa je stanje uvijek zapisano i vidljivo i u Notepadu.
  *
  * Čista logika bez Androida.

@@ -145,4 +145,17 @@ class ObjektiTest {
             assertEquals("papir $n: stabilno i bez izvora", z.sirovo, z3.sirovo)
         }
     }
+
+    @Test
+    fun primjerKupovina() {
+        val f = listOf(java.io.File("../primjeri/kupovina.txt"), java.io.File("primjeri/kupovina.txt")).first { it.exists() }
+        val sirovo = PapirFile.decode(f.readBytes())!!.text
+        val p = Oblik.citaj(sirovo)
+        assertEquals("Kupovina\n▼ Pekara\n  □ kruh\n  ■ kifle\n► Tržnica\n  □ rajčica\nRecept: torta", p.tekst)
+        assertEquals(listOf(Objekt.kutija(0, 24, "ne zaboravi\nkartice!")), p.objekti)
+        assertEquals(listOf(5..5), Mape.skriveni(p.tekst.split("\n")))
+        assertEquals("Torta.pap", p.stilovi.last().poveznica)
+        assertEquals(sirovo, Oblik.zapisi(p.tekst, p.stilovi, p.linije, p.kljuc, p.format, p.objekti, p.mreza).sirovo)
+        assertEquals(sirovo, Oblik.zapisi(p.tekst, p.stilovi, kljuc = p.kljuc, objekti = p.objekti).sirovo)
+    }
 }

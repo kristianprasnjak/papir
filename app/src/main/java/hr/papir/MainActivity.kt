@@ -1077,7 +1077,7 @@ private fun TextSegment(
                         }
                     }
                 }
-                // Dodir na □ ■ ► ▼ mijenja znak (STANDARD.md, 5.2 i 5.3); tekstno polje dobije dodir normalno.
+                // Dodir na □ ■ ► ▼ mijenja znak (STANDARD.md, 5.1 i 5.2); tekstno polje dobije dodir normalno.
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         val dolje = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
