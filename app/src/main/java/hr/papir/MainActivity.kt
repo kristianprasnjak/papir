@@ -2,36 +2,32 @@ package hr.papir
 
 import android.content.ClipData
 import android.content.Intent
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.runtime.key
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.platform.ClipboardManager
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,12 +35,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -57,22 +57,41 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -83,11 +102,16 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
 
@@ -123,60 +147,106 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Radnje s tablicom iz popisa funkcija, dok je kursor u ćeliji. */
+private enum class TableAction { RowBelow, ColumnRight, DeleteRow, DeleteColumn, DeleteTable }
+
 /**
  * Traka iznad tipkovnice, na dohvat palca: lijevo poništi i ponovi, desno funkcije.
  * Jedan dodir otvara popis funkcija, drugi umeće funkciju (PAPIR.md, ustav 4).
- *
- * Popis je dio rasporeda, a ne skočni prozor, pa ga tipkovnica ne može prekriti
- * i ne oduzima fokus papiru (tipkovnica ostaje otvorena).
+ * Iznad nje, kad treba: radnje s izabranom slikom ili kutijom, ili s poveznicom pod kursorom.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BottomBar(
+    vm: PapirViewModel,
     open: Boolean,
-    enabled: Boolean,
-    canUndo: Boolean,
-    canRedo: Boolean,
-    onUndo: () -> Unit,
-    onRedo: () -> Unit,
     onToggle: () -> Unit,
-    current: Stil,
-    onBold: () -> Unit,
-    onItalic: () -> Unit,
-    onSize: (Int) -> Unit,
-    onDateTime: () -> Unit,
+    onClose: () -> Unit,
     textFunctions: Boolean,
-    onTable: () -> Unit,
     tableShape: Pair<Int, Int>?,
     onTableAction: (TableAction) -> Unit,
+    onLink: () -> Unit,
+    onImage: () -> Unit,
+    onOpenLink: (String) -> Unit,
+    onRenameImage: () -> Unit,
 ) {
+    val enabled = !vm.readOnly
+    val izabrani = vm.selected
+    val ghost = vm.ghost
     Column(Modifier.fillMaxWidth()) {
-        if (open && !textFunctions) {
-            // U ćeliji: radnje s tablicom. Svaka je jedan korak za ↶.
-            val (retci, stupci) = tableShape ?: (0 to 0)
-            FunctionItem("Novi redak ispod", { onTableAction(TableAction.RowBelow) }, tableShape != null)
-            FunctionItem("Novi stupac desno", { onTableAction(TableAction.ColumnRight) }, tableShape != null)
-            FunctionItem("Obriši redak", { onTableAction(TableAction.DeleteRow) }, retci > 1)
-            FunctionItem("Obriši stupac", { onTableAction(TableAction.DeleteColumn) }, stupci > 1)
-            FunctionItem("Obriši tablicu", { onTableAction(TableAction.DeleteTable) }, tableShape != null)
-        }
-        if (open && textFunctions) {
-            // Oblikovanje: djeluje na odabrani tekst; veličina djeluje na cijele retke.
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FormatButton("B", "Podebljano", current.podebljano, onBold, bold = true)
-                FormatButton("I", "Kurziv", current.kurziv, onItalic, italic = true)
-                Spacer(Modifier.width(8.dp))
-                listOf(-2 to "XS", -1 to "S", 0 to "M", 1 to "L", 2 to "XL").forEach { (v, label) ->
-                    FormatButton(label, "Veličina $label", current.velicina == v, { onSize(v) })
+        when {
+            izabrani != null && ghost != null && enabled -> {
+                // Pomicanje ili veličina: strelice, pa potvrda. Ništa se ne mijenja dok se ne potvrdi.
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    BarButton("←", "Lijevo", true) { vm.nudge(-1, 0) }
+                    BarButton("↑", "Gore", true) { vm.nudge(0, -1) }
+                    BarButton("↓", "Dolje", true) { vm.nudge(0, 1) }
+                    BarButton("→", "Desno", true) { vm.nudge(1, 0) }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = vm::cancelGhost) { Text("Odustani") }
+                    TextButton(onClick = vm::confirmGhost, enabled = vm.ghostFree) { Text("Potvrdi") }
                 }
             }
-            FunctionItem("Datum i vrijeme", onDateTime)
-            FunctionItem("Tablica", onTable)
+            izabrani != null && enabled -> {
+                FlowRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { vm.startGhost(PapirViewModel.GhostMode.MOVE) }) { Text("Pomakni") }
+                    if (izabrani.vrsta == Objekt.Vrsta.SLIKA) {
+                        TextButton(onClick = { vm.startGhost(PapirViewModel.GhostMode.SIZE) }) { Text("Veličina") }
+                        TextButton(onClick = onRenameImage) { Text("Preimenuj") }
+                    }
+                    TextButton(onClick = vm::deleteSelected) { Text("Obriši") }
+                    TextButton(onClick = { vm.select(null) }) { Text("Gotovo") }
+                }
+            }
+            open && enabled && !textFunctions -> {
+                val (retci, stupci) = tableShape ?: (0 to 0)
+                FlowRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { onTableAction(TableAction.RowBelow) }, enabled = tableShape != null) { Text("Redak ispod") }
+                    TextButton(onClick = { onTableAction(TableAction.ColumnRight) }, enabled = tableShape != null) { Text("Stupac desno") }
+                    TextButton(onClick = { onTableAction(TableAction.DeleteRow) }, enabled = retci > 1) { Text("Obriši redak") }
+                    TextButton(onClick = { onTableAction(TableAction.DeleteColumn) }, enabled = stupci > 1) { Text("Obriši stupac") }
+                    TextButton(onClick = { onTableAction(TableAction.DeleteTable) }, enabled = tableShape != null) { Text("Obriši tablicu") }
+                }
+            }
+            open && enabled -> {
+                val current = vm.currentStyle
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FormatButton("B", "Podebljano", current.podebljano, vm::toggleBold, bold = true)
+                    FormatButton("I", "Kurziv", current.kurziv, vm::toggleItalic, italic = true)
+                    Spacer(Modifier.width(8.dp))
+                    listOf(0 to "M", 1 to "L", 2 to "XL").forEach { (v, label) ->
+                        FormatButton(label, "Veličina $label", current.velicina == v, { vm.setSize(v) })
+                    }
+                }
+                FlowRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { onClose(); vm.insertCheckbox() }) { Text("□ Kvačica") }
+                    TextButton(onClick = { onClose(); vm.insertFolder() }) { Text("▼ Mapa") }
+                    TextButton(onClick = { onClose(); onLink() }) { Text("Poveznica") }
+                    TextButton(onClick = { onClose(); vm.insertTable() }) { Text("Tablica") }
+                    TextButton(onClick = { onClose(); onImage() }) { Text("Slika") }
+                    TextButton(onClick = { onClose(); vm.insertBox() }) { Text("Kutija") }
+                    TextButton(onClick = { onClose(); vm.insertDateTime() }) { Text("Datum i vrijeme") }
+                }
+            }
+            enabled && vm.linkAtCursor != null -> {
+                val cilj = vm.linkAtCursor.orEmpty()
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = { onOpenLink(cilj) }, modifier = Modifier.weight(1f)) {
+                        Text("Otvori: $cilj", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    TextButton(onClick = vm::removeLink) { Text("Ukloni") }
+                }
+            }
         }
         Row(
             Modifier
@@ -185,8 +255,8 @@ private fun BottomBar(
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BarButton("↶", "Poništi", enabled && canUndo, onUndo)
-            BarButton("↷", "Ponovi", enabled && canRedo, onRedo)
+            BarButton("↶", "Poništi", enabled && vm.canUndo, vm::undo)
+            BarButton("↷", "Ponovi", enabled && vm.canRedo, vm::redo)
             Spacer(Modifier.weight(1f))
             BarButton(if (open) "×" else "+", if (open) "Zatvori funkcije" else "Funkcije", enabled, onToggle)
         }
@@ -230,14 +300,58 @@ private fun FormatButton(
     }
 }
 
-/** Prikaz oblikovanja: oznake su već uklonjene iz teksta, ovdje se samo crta stil (pozicije se ne mijenjaju). */
-private class StilPrikaz(private val stilovi: List<Stil>) : VisualTransformation {
+/**
+ * Prikaz: oznake su već uklonjene iz teksta; ovdje se crta stil, poveznica i nađeni tekst, a gdje
+ * tekst teče desno od slike ili kutije, umeću se razmaci (samo na ekranu, kao u Notepadu).
+ */
+private class StilPrikaz(
+    private val stilovi: List<Stil>,
+    private val praznine: Map<Int, Int>,
+    private val oznake: List<IntRange>,
+    private val trenutna: IntRange?,
+    private val bojaPoveznice: Color,
+    private val bojaOznake: Color,
+    private val bojaTrenutne: Color,
+) : VisualTransformation {
+
+    var mapping: OffsetMapping = OffsetMapping.Identity
+        private set
+
     override fun filter(text: AnnotatedString): TransformedText {
-        val b = AnnotatedString.Builder(text)
-        for ((od, doo, s) in Oblik.dijelovi(stilovi)) {
-            if (doo <= text.length) b.addStyle(spanOf(s), od, doo)
+        val n = text.length
+        val prije = IntArray(n + 1) // umetnuto prije pozicije i (ne uključujući prazninu na i)
+        var zbroj = 0
+        for (i in 0..n) {
+            prije[i] = zbroj
+            zbroj += praznine[i] ?: 0
         }
-        return TransformedText(b.toAnnotatedString(), OffsetMapping.Identity)
+        fun znak(i: Int) = i + prije[i] + (praznine[i] ?: 0) // gdje je znak i u prikazu
+        val b = AnnotatedString.Builder()
+        for (i in 0 until n) {
+            praznine[i]?.let { b.append(" ".repeat(it)) }
+            b.append(text[i])
+        }
+        for ((od, doo, s) in Oblik.dijelovi(stilovi)) {
+            if (doo <= n && doo > od) b.addStyle(spanOf(s), znak(od), znak(doo - 1) + 1)
+        }
+        for (r in oznake) {
+            if (r.last < n) b.addStyle(SpanStyle(background = if (r == trenutna) bojaTrenutne else bojaOznake), znak(r.first), znak(r.last) + 1)
+        }
+        val m = b.length
+        val uPrikaz = IntArray(n + 1) { it + prije[it] }
+        // svaki znak prikaza pripada znaku teksta: razmaci praznine onome ispred kojeg stoje
+        val izPrikaza = IntArray(m + 1)
+        var t = 0
+        for (i in 0 until n) {
+            repeat(praznine[i] ?: 0) { izPrikaza[t++] = i }
+            izPrikaza[t++] = i
+        }
+        izPrikaza[m] = n
+        mapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int = uPrikaz[offset.coerceIn(0, n)]
+            override fun transformedToOriginal(offset: Int): Int = izPrikaza[offset.coerceIn(0, m)]
+        }
+        return TransformedText(b.toAnnotatedString(), mapping)
     }
 
     private fun spanOf(s: Stil) = SpanStyle(
@@ -246,33 +360,11 @@ private class StilPrikaz(private val stilovi: List<Stil>) : VisualTransformation
         fontSize = when (s.velicina) {
             2 -> 1.7.em
             1 -> 1.3.em
-            -1 -> 0.85.em
-            -2 -> 0.7.em
             else -> TextUnit.Unspecified
         },
+        color = if (s.poveznica != null) bojaPoveznice else Color.Unspecified,
+        textDecoration = if (s.poveznica != null) TextDecoration.Underline else null,
     )
-}
-
-/** Radnje s tablicom iz popisa funkcija, dok je kursor u ćeliji. */
-private enum class TableAction { RowBelow, ColumnRight, DeleteRow, DeleteColumn, DeleteTable }
-
-@Composable
-private fun FunctionItem(label: String, onClick: () -> Unit, enabled: Boolean = true) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.38f),
-        )
-    }
 }
 
 /** Sukob: datoteka je promijenjena izvana dok su ovdje bile nespremljene izmjene. Odlučuje čovjek. */
@@ -312,6 +404,47 @@ private fun FolderPrompt(onChoose: () -> Unit) {
     }
 }
 
+/** Traži i zamijeni, kao u Notepadu (PAPIR.md, 5). */
+@Composable
+private fun SearchBar(vm: PapirViewModel, onClose: () -> Unit) {
+    var zamjena by remember { mutableStateOf("") }
+    val fokus = remember { FocusRequester() }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = vm.searchQuery,
+                onValueChange = { vm.search(it) },
+                singleLine = true,
+                placeholder = { Text("Traži") },
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+                modifier = Modifier.weight(1f).focusRequester(fokus),
+            )
+            Text(
+                if (vm.matches.isEmpty()) "0" else "${vm.currentMatch + 1}/${vm.matches.size}",
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(horizontal = 6.dp),
+            )
+            BarButton("↑", "Prethodno", vm.matches.isNotEmpty()) { vm.nextMatch(-1) }
+            BarButton("↓", "Sljedeće", vm.matches.isNotEmpty()) { vm.nextMatch(1) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = zamjena,
+                onValueChange = { zamjena = it },
+                singleLine = true,
+                placeholder = { Text("Zamijeni s") },
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+                modifier = Modifier.weight(1f),
+            )
+            FormatButton("Aa", "Velika i mala slova", vm.matchCase, { vm.search(vm.searchQuery, !vm.matchCase) })
+            TextButton(onClick = { vm.replaceCurrent(zamjena) }, enabled = !vm.readOnly && vm.matches.isNotEmpty()) { Text("Zamijeni") }
+            TextButton(onClick = { vm.replaceAll(zamjena) }, enabled = !vm.readOnly && vm.matches.isNotEmpty()) { Text("Sve") }
+            BarButton("×", "Zatvori traženje", true) { vm.endSearch(); onClose() }
+        }
+    }
+    LaunchedEffect(Unit) { fokus.requestFocus() }
+}
+
 @Composable
 private fun PapirTheme(content: @Composable () -> Unit) {
     val colors = if (isSystemInDarkTheme()) {
@@ -326,8 +459,12 @@ private fun PapirTheme(content: @Composable () -> Unit) {
 private fun PapirScreen(vm: PapirViewModel) {
     var menuOpen by remember { mutableStateOf(false) }
     var functionsOpen by remember { mutableStateOf(false) }
+    var searching by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<TextFieldValue?>(null) }
+    var linkDialog by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var imageName by remember { mutableStateOf<String?>(null) }
     val keyboard = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
 
     val openDoc = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) vm.open(uri, fromPicker = true)
@@ -341,12 +478,29 @@ private fun PapirScreen(vm: PapirViewModel) {
     ) { uri ->
         if (uri != null) vm.saveAs(uri)
     }
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) vm.insertImage(uri)
+    }
+
+    fun openLink(cilj: String) {
+        val web = cilj.startsWith("http://", true) || cilj.startsWith("https://", true) || cilj.startsWith("mailto:", true)
+        if (web) {
+            // Papir nema internet: poveznicu otvara preglednik koji korisnik ima.
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(cilj)))
+            } catch (e: Exception) {
+                vm.message = "Nijedna aplikacija ne može otvoriti „$cilj“."
+            }
+        } else {
+            vm.openPaperByName(cilj)
+        }
+    }
 
     val showPaper = vm.loaded && !vm.needsFolder
 
     val tekst = vm.content.text
     val linije = remember(tekst) { tekst.split("\n") }
-    val odsjecci = remember(linije.size, vm.tables) { Odsjecci.podijeli(linije.size, vm.tables) }
+    val odsjecci = remember(linije.size, vm.tables, vm.hidden) { Odsjecci.podijeli(linije.size, vm.tables, vm.hidden) }
     val requesters = remember(odsjecci.size) { List(odsjecci.size) { FocusRequester() } }
     var focusedCell by remember { mutableStateOf<Any?>(null) }
     var focusText by remember { mutableStateOf(0) }
@@ -386,7 +540,7 @@ private fun PapirScreen(vm: PapirViewModel) {
             // kursor u odsječku teksta u kojem je bio; papir bez tablica ima samo jedan
             val kursor = vm.content.selection.start
             val indeks = odsjecci.indices.lastOrNull { i ->
-                odsjecci[i].tablica == null && Odsjecci.pocetak(tekst, odsjecci[i].od) <= kursor
+                odsjecci[i].tablica == null && !odsjecci[i].skriveno && Odsjecci.pocetak(tekst, odsjecci[i].od) <= kursor
             } ?: odsjecci.lastIndex
             try {
                 requesters[indeks].requestFocus()
@@ -439,6 +593,10 @@ private fun PapirScreen(vm: PapirViewModel) {
                                 onClick = { menuOpen = false; openDoc.launch(arrayOf("*/*")) },
                             )
                             DropdownMenuItem(
+                                text = { Text("Traži i zamijeni…") },
+                                onClick = { menuOpen = false; searching = true },
+                            )
+                            DropdownMenuItem(
                                 text = { Text("Preimenuj…") },
                                 enabled = vm.canRename,
                                 onClick = {
@@ -461,6 +619,8 @@ private fun PapirScreen(vm: PapirViewModel) {
                         }
                     }
                 }
+
+                if (searching) SearchBar(vm) { searching = false }
 
                 if (vm.conflict) {
                     ConflictBar(onKeepMine = vm::keepMine, onLoadTheirs = vm::loadTheirs)
@@ -486,22 +646,17 @@ private fun PapirScreen(vm: PapirViewModel) {
                 )
 
                 BottomBar(
+                    vm = vm,
                     open = functionsOpen && !vm.readOnly,
-                    enabled = !vm.readOnly,
-                    canUndo = vm.canUndo,
-                    canRedo = vm.canRedo,
-                    onUndo = vm::undo,
-                    onRedo = vm::redo,
                     onToggle = { functionsOpen = !functionsOpen },
-                    current = vm.currentStyle,
-                    onBold = vm::toggleBold,
-                    onItalic = vm::toggleItalic,
-                    onSize = vm::setSize,
-                    onDateTime = { functionsOpen = false; vm.insertDateTime() },
+                    onClose = { functionsOpen = false },
                     textFunctions = focusedCell == null,
-                    onTable = { functionsOpen = false; vm.insertTable() },
                     tableShape = tableShape,
                     onTableAction = { onTableAction(it) },
+                    onLink = { linkDialog = vm.selectedText.replace('\n', ' ') to "" },
+                    onImage = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    onOpenLink = { openLink(it) },
+                    onRenameImage = { imageName = vm.selected?.sadrzaj },
                 )
             }
         }
@@ -536,6 +691,64 @@ private fun PapirScreen(vm: PapirViewModel) {
             },
         )
     }
+
+    imageName?.let { ime ->
+        AlertDialog(
+            onDismissRequest = { imageName = null },
+            title = { Text("Ime slike") },
+            text = {
+                OutlinedTextField(
+                    value = ime,
+                    onValueChange = { imageName = it },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    imageName = null
+                    vm.renameImage(ime)
+                }) { Text("Preimenuj") }
+            },
+            dismissButton = {
+                TextButton(onClick = { imageName = null }) { Text("Odustani") }
+            },
+        )
+    }
+
+    linkDialog?.let { (t, c) ->
+        AlertDialog(
+            onDismissRequest = { linkDialog = null },
+            title = { Text("Poveznica") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = t,
+                        onValueChange = { linkDialog = it to c },
+                        singleLine = true,
+                        label = { Text("Tekst") },
+                    )
+                    OutlinedTextField(
+                        value = c,
+                        onValueChange = { linkDialog = t to it },
+                        singleLine = true,
+                        label = { Text("Cilj: ime papira ili web adresa") },
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    linkDialog = null
+                    vm.insertLink(t, c)
+                }) { Text("Umetni") }
+            },
+            dismissButton = {
+                TextButton(onClick = { linkDialog = null }) { Text("Odustani") }
+            },
+        )
+    }
 }
 
 @Composable
@@ -559,9 +772,13 @@ private fun papirStil(): TextStyle = TextStyle(
     color = MaterialTheme.colorScheme.onSurface,
 )
 
+/** Gdje je na ekranu svaki redak čistog teksta: vrh i dno u pikselima, unutar papira. */
+private typealias Polozaji = SnapshotStateMap<Int, Pair<Float, Float>>
+
 /**
- * Papir kao niz odsječaka: tekst i tablice (ARHITEKTURA.md). Papir bez tablica je jedan
- * tekstni odsječak, kao i prije. Sve izmjene idu kroz model, koji ih prepiše u txt.
+ * Papir kao niz odsječaka: tekst, tablice i skriveni sadržaj zatvorenih mapa (ARHITEKTURA.md).
+ * Retci se ne prelamaju, kao u Notepadu: dugačak redak ide udesno i papir se pomiče i vodoravno.
+ * Slike i kutije stoje iznad teksta na svom mjestu mreže.
  */
 @Composable
 private fun Paper(
@@ -575,54 +792,216 @@ private fun Paper(
     modifier: Modifier = Modifier,
 ) {
     val tekst = vm.content.text
-    Column(
-        modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-    ) {
-        odsjecci.forEachIndexed { i, o ->
-            val tablica = o.tablica
-            if (tablica != null) {
-                key("tablica", tablica) {
-                    val blok = linije.subList(o.od, o.doo)
-                    val t = remember(blok) { Tablice.citaj(blok) }
-                    if (t != null) {
-                        TableView(
-                            t = t,
-                            index = tablica,
-                            enabled = !vm.readOnly,
-                            focusedCell = focusedCell,
-                            onFocusCell = onFocusCell,
-                            onCell = { r, c, prije, celija -> vm.editCell(tablica, r, c, prije, celija) },
-                        )
+    val polozaji: Polozaji = remember { mutableStateMapOf() }
+    val vScroll = rememberScrollState()
+    val hScroll = rememberScrollState()
+    val stil = papirStil()
+    val measurer = rememberTextMeasurer()
+    val znak = remember(stil) { measurer.measure("0", stil).size.width.toFloat() }
+    val density = LocalDensity.current
+
+    // skriveni i nestali retci nemaju mjesto na ekranu (objekti u njima se ne crtaju)
+    LaunchedEffect(vm.hidden, linije.size) {
+        polozaji.keys.filter { l -> l >= linije.size || vm.hidden.any { l in it } }.forEach { polozaji.remove(it) }
+    }
+
+    // traženje: nađeni tekst se dovodi na ekran
+    LaunchedEffect(vm.currentMatch, vm.matches) {
+        val m = vm.matches.getOrNull(vm.currentMatch) ?: return@LaunchedEffect
+        val linija = tekst.substring(0, m.first.coerceAtMost(tekst.length)).count { it == '\n' }
+        val stupac = m.first - (tekst.lastIndexOf('\n', m.first - 1) + 1)
+        polozaji[linija]?.let { (vrh, _) -> vScroll.animateScrollTo((vrh - 100f).roundToInt().coerceAtLeast(0)) }
+        hScroll.animateScrollTo(((stupac - 4) * znak).roundToInt().coerceAtLeast(0))
+    }
+
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val sirinaEkrana = maxWidth
+        Box(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(vScroll)
+                .horizontalScroll(hScroll),
+        ) {
+            Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                Column(Modifier.widthIn(min = sirinaEkrana - 40.dp)) {
+                    odsjecci.forEachIndexed { i, o ->
+                        val tablica = o.tablica
+                        when {
+                            o.skriveno -> {}
+                            tablica != null -> key("tablica", tablica) {
+                                val blok = linije.subList(o.od, o.doo)
+                                val t = remember(blok) { Tablice.citaj(blok) }
+                                if (t != null) {
+                                    TableView(
+                                        t = t,
+                                        index = tablica,
+                                        enabled = !vm.readOnly,
+                                        focusedCell = focusedCell,
+                                        onFocusCell = onFocusCell,
+                                        onCell = { r, c, prije, celija -> vm.editCell(tablica, r, c, prije, celija) },
+                                        modifier = Modifier.onGloballyPositioned { k ->
+                                            val vrh = k.positionInParent().y
+                                            val v = k.size.height.toFloat() / (o.doo - o.od)
+                                            for (l in o.od until o.doo) polozaji[l] = (vrh + (l - o.od) * v) to (vrh + (l - o.od + 1) * v)
+                                        },
+                                    )
+                                }
+                            }
+                            else -> key("tekst", i) {
+                                TextSegment(
+                                    vm = vm,
+                                    tekst = tekst,
+                                    linije = linije,
+                                    odsjecak = o,
+                                    requester = requesters.getOrNull(i),
+                                    sirina = sirinaEkrana - 40.dp,
+                                    polozaji = polozaji,
+                                    onFocused = { onFocusCell(null); vm.select(null) },
+                                )
+                            }
+                        }
                     }
-                }
-            } else {
-                key("tekst", i) {
-                    TextSegment(
-                        vm = vm,
-                        tekst = tekst,
-                        linije = linije,
-                        odsjecak = o,
-                        requester = requesters.getOrNull(i),
-                        onFocused = { onFocusCell(null) },
+                    // Dodir ispod teksta vodi na kraj papira.
+                    Box(
+                        Modifier
+                            .width(sirinaEkrana - 40.dp)
+                            .height(240.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onTapBelow,
+                            ),
                     )
+                }
+                Objects(vm, polozaji, znak, density)
+            }
+        }
+    }
+}
+
+/** Vrh i dno retka mreže na ekranu. Crta naslova je donja polovica njegova retka. */
+private fun rowSpan(vm: PapirViewModel, polozaji: Polozaji, redak: Int): Pair<Float, Float>? {
+    val linija = vm.lineOfRawRow(redak)
+    val (vrh, dno) = polozaji[linija] ?: return null
+    val prvi = vm.rawRowOfLine(linija)
+    val redova = vm.rawRowOfLine(linija + 1) - prvi
+    if (redova <= 1) return vrh to dno
+    val v = (dno - vrh) / redova
+    val k = (redak - prvi).coerceIn(0, redova - 1)
+    return (vrh + k * v) to (vrh + (k + 1) * v)
+}
+
+/** Slike i kutije iznad teksta, i obris novog položaja dok se pomiču. */
+@Composable
+private fun Objects(vm: PapirViewModel, polozaji: Polozaji, znak: Float, density: androidx.compose.ui.unit.Density) {
+    val linija = MaterialTheme.colorScheme.outline
+    val izabranaBoja = MaterialTheme.colorScheme.primary
+    // objekt u skrivenom sadržaju mape se ne crta
+    val vidljivi = vm.objects.mapNotNull { o ->
+        val gore = rowSpan(vm, polozaji, o.redak)
+        val dolje = rowSpan(vm, polozaji, o.zadnjiRedak)
+        if (gore == null || dolje == null) null else Triple(o, gore, dolje)
+    }
+    for ((o, gore, dolje) in vidljivi) {
+        val x = o.stupac * znak
+        val w = o.sirina * znak
+        val h = dolje.second - gore.first
+        val izabran = vm.selected == o
+        key(o.vrsta, o.redak, o.stupac) {
+            Box(
+                Modifier
+                    .offset { IntOffset(x.roundToInt(), gore.first.roundToInt()) }
+                    .size(with(density) { w.toDp() }, with(density) { h.toDp() })
+                    .border(if (izabran) 3.dp else 2.dp, if (izabran) izabranaBoja else linija),
+            ) {
+                when (o.vrsta) {
+                    Objekt.Vrsta.SLIKA -> ImageObject(vm, o)
+                    Objekt.Vrsta.KUTIJA -> BoxObject(vm, o, polozaji, znak, gore.first, density)
                 }
             }
         }
-        // Dodir ispod teksta vodi na kraj papira.
+    }
+    val g = vm.ghost
+    if (g != null) {
+        val gore = rowSpan(vm, polozaji, g.redak)
+        val dolje = rowSpan(vm, polozaji, g.zadnjiRedak)
+        val visinaRetka = gore?.let { it.second - it.first } ?: 40f
+        // ispod kraja teksta: nastavlja se mreža redaka iste visine
+        val y = gore?.first ?: ((polozaji.values.maxOfOrNull { it.second } ?: 0f) + (g.redak - vm.rawRowOfLine(Int.MAX_VALUE)) * visinaRetka)
+        val h = if (gore != null && dolje != null) dolje.second - gore.first else g.visina * visinaRetka
         Box(
             Modifier
-                .fillMaxWidth()
-                .height(240.dp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onTapBelow,
-                ),
+                .offset { IntOffset((g.stupac * znak).roundToInt(), y.roundToInt()) }
+                .size(with(density) { (g.sirina * znak).toDp() }, with(density) { h.toDp() })
+                .border(3.dp, if (vm.ghostFree) izabranaBoja else MaterialTheme.colorScheme.error),
         )
     }
+}
+
+@Composable
+private fun ImageObject(vm: PapirViewModel, o: Objekt) {
+    val bajtovi = vm.attachments[o.sadrzaj]
+    val slika = remember(o.sadrzaj, bajtovi) {
+        bajtovi?.let { b ->
+            try {
+                val granice = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(b, 0, b.size, granice)
+                var uzorak = 1
+                while (granice.outWidth / uzorak > 1600 || granice.outHeight / uzorak > 1600) uzorak *= 2
+                BitmapFactory.decodeByteArray(b, 0, b.size, BitmapFactory.Options().apply { inSampleSize = uzorak })?.asImageBitmap()
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clickable { vm.select(o) },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (slika != null) {
+            Image(slika, contentDescription = o.sadrzaj, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(3.dp))
+        } else {
+            Text(o.sadrzaj, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** Kutija teksta: piše se kao u ćeliji, Enter je novi red, kutija prati širinu teksta. */
+@Composable
+private fun BoxObject(
+    vm: PapirViewModel,
+    o: Objekt,
+    polozaji: Polozaji,
+    znak: Float,
+    vrh: Float,
+    density: androidx.compose.ui.unit.Density,
+) {
+    var lokalno by remember(o.redak, o.stupac) { mutableStateOf(TextFieldValue(o.sadrzaj, TextRange(o.sadrzaj.length))) }
+    val trenutni by rememberUpdatedState(o)
+    LaunchedEffect(o.sadrzaj) {
+        if (Tablice.normaliziraj(lokalno.text) != Tablice.normaliziraj(o.sadrzaj)) {
+            lokalno = TextFieldValue(o.sadrzaj, TextRange(o.sadrzaj.length))
+        }
+    }
+    val prviRed = rowSpan(vm, polozaji, o.redak + 1)?.first ?: vrh
+    BasicTextField(
+        value = lokalno,
+        onValueChange = { v ->
+            val promijenjeno = v.text != lokalno.text
+            lokalno = v
+            if (promijenjeno) vm.editBox(trenutni, v.text)
+        },
+        readOnly = vm.readOnly,
+        textStyle = papirStil(),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+        modifier = Modifier
+            .offset { IntOffset((2 * znak).roundToInt(), (prviRed - vrh).roundToInt()) }
+            .width(with(density) { ((o.sirina - 4).coerceAtLeast(1) * znak).toDp() })
+            .onFocusChanged { if (it.isFocused) vm.select(trenutni) },
+    )
 }
 
 @Composable
@@ -632,6 +1011,8 @@ private fun TextSegment(
     linije: List<String>,
     odsjecak: Odsjecak,
     requester: FocusRequester?,
+    sirina: Dp,
+    polozaji: Polozaji,
     onFocused: () -> Unit,
 ) {
     val start = Odsjecci.pocetak(tekst, odsjecak.od)
@@ -646,7 +1027,19 @@ private fun TextSegment(
     val dijelStilova = remember(styles, start, end) {
         if (end <= styles.size) styles.subList(start, end).toList() else List(dio.length) { Stil.OBICNO }
     }
-    val prikaz = remember(dijelStilova) { StilPrikaz(dijelStilova) }
+    val praznine = remember(vm.gaps, start, end) {
+        vm.gaps.filterKeys { it in start until end }.mapKeys { it.key - start }
+    }
+    val oznake = remember(vm.matches, start, end) {
+        vm.matches.filter { it.first >= start && it.last < end }.map { (it.first - start)..(it.last - start) }
+    }
+    val trenutna = vm.matches.getOrNull(vm.currentMatch)?.let { (it.first - start)..(it.last - start) }
+    val boje = MaterialTheme.colorScheme
+    val prikaz = remember(dijelStilova, praznine, oznake, trenutna, boje) {
+        StilPrikaz(dijelStilova, praznine, oznake, trenutna, boje.primary, boje.primary.copy(alpha = 0.18f), boje.primary.copy(alpha = 0.4f))
+    }
+    var raspored by remember { mutableStateOf<TextLayoutResult?>(null) }
+    var vrhOdsjecka by remember { mutableStateOf(0f) }
 
     // Kopiranje šalje i goli tekst i HTML s pravim oblikovanjem (PAPIR.md, 4).
     val trenutno by rememberUpdatedState(Triple(dio, lokalno, dijelStilova))
@@ -659,6 +1052,8 @@ private fun TextSegment(
             else d.substring(s.min, s.max) to st.subList(s.min, s.max)
         }
     }
+    val pocetak by rememberUpdatedState(start)
+    val trenutniPrikaz by rememberUpdatedState(prikaz)
     CompositionLocalProvider(LocalClipboardManager provides clipboard) {
         BasicTextField(
             value = TextFieldValue(dio, lokalno, comp),
@@ -672,8 +1067,38 @@ private fun TextSegment(
                 capitalization = KeyboardCapitalization.None,
                 autoCorrectEnabled = false,
             ),
+            onTextLayout = { l ->
+                raspored = l
+                for (k in 0 until minOf(l.lineCount, odsjecak.doo - odsjecak.od)) {
+                    polozaji[odsjecak.od + k] = (vrhOdsjecka + l.getLineTop(k)) to (vrhOdsjecka + l.getLineBottom(k))
+                }
+            },
             modifier = Modifier
-                .fillMaxWidth()
+                .widthIn(min = sirina)
+                .onGloballyPositioned { k ->
+                    val y = k.positionInParent().y
+                    if (y != vrhOdsjecka) {
+                        vrhOdsjecka = y
+                        raspored?.let { l ->
+                            for (r in 0 until minOf(l.lineCount, odsjecak.doo - odsjecak.od)) {
+                                polozaji[odsjecak.od + r] = (y + l.getLineTop(r)) to (y + l.getLineBottom(r))
+                            }
+                        }
+                    }
+                }
+                // Dodir na □ ■ ► ▼ mijenja znak (STANDARD.md, 5.1 i 5.2); tekstno polje dobije dodir normalno.
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val dolje = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        val gore = waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                        if (gore != null && (gore.position - dolje.position).getDistance() < viewConfiguration.touchSlop) {
+                            raspored?.let { l ->
+                                val t = l.getOffsetForPosition(dolje.position)
+                                vm.toggleAt(pocetak + trenutniPrikaz.mapping.transformedToOriginal(t))
+                            }
+                        }
+                    }
+                }
                 .let { if (requester != null) it.focusRequester(requester) else it }
                 .onFocusChanged { if (it.isFocused) onFocused() },
         )
@@ -712,6 +1137,7 @@ private fun TableView(
     focusedCell: Any?,
     onFocusCell: (Any?) -> Unit,
     onCell: (Int, Int, String, String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val stil = papirStil()
     val measurer = rememberTextMeasurer()
@@ -721,12 +1147,7 @@ private fun TableView(
     val sirine = t.sirine.map { znak * (maxOf(it, 1) + 2) }
     val ukupno = sirine.fold(0.dp) { a, b -> a + b }
     val linija = MaterialTheme.colorScheme.outline
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(vertical = 6.dp),
-    ) {
+    Box(modifier.padding(vertical = 6.dp)) {
         Column(Modifier.border(1.dp, linija)) {
             t.retci.forEachIndexed { r, row ->
                 if (r > 0) {

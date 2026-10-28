@@ -2,7 +2,7 @@
 
 Ovaj dokument opisuje **aplikaciju** Papir za Android: čemu služi, što nikad ne radi i kako se njome upravlja. Format datoteka opisan je zasebno, u [STANDARD.md](STANDARD.md); aplikacija ga poštuje kao i svaki drugi program. Kako je aplikacija izgrađena opisuje [ARHITEKTURA.md](ARHITEKTURA.md).
 
-Aplikacija se smije mijenjati brzo. Ustav ne.
+Aplikacija se smije mijenjati brzo. Ustav ne. Ukratko, sve je u [MANIFEST.md](MANIFEST.md).
 
 ---
 
@@ -25,7 +25,8 @@ Ustav je iznad svakog zahtjeva za funkcijom. Ako se funkcija ne može napraviti 
 
 ## 2. Upravljanje
 
-- **Svaka kontrola mijenja ili datoteku ili samo prikaz, i to se mora znati.** B, I, veličina, tablica i datum mijenjaju datoteku. Pomicanje, povećavanje i sve što samo gleda ne mijenja ništa.
+- **Svaka kontrola mijenja ili datoteku ili samo prikaz, i to se mora znati.** B, I, veličina, tablica, kvačica, mapa, poveznica, slika, kutija i datum mijenjaju datoteku. Pomicanje papira i traženje ne mijenjaju ništa.
+- **Papir se ne prelama**, kao u Notepadu: dugačak redak ide udesno, a papir se pomiče i vodoravno. Ekran je točno mreža iz datoteke, pa slike i kutije stoje gdje stoje i u Notepadu.
 - **Nema skrivenih načina rada.** Što je na ekranu, to je stanje; nema „uključenog" načina koji mijenja što tipke rade bez da se vidi.
 - **Ništa slučajno.** Nijedna gesta, dvostruki dodir ni duži pritisak ne umeće funkciju. Funkcija je uvijek dva namjerna dodira: **+**, pa funkcija.
 - **Sve se može poništiti.** Svaka izmjena, uključujući funkcije i radnje s tablicama, jedan je korak za ↶.
@@ -51,3 +52,49 @@ Ustav je iznad svakog zahtjeva za funkcijom. Ako se funkcija ne može napraviti 
 - Program u koji se lijepi sam bira što zna: e-mail i uređivači teksta dobiju pravo oblikovanje, tražilica i SMS dobiju goli tekst.
 - Lijepljenje u Papir zasad uzima samo goli tekst. Lijepljenje s oblikovanjem dolazi kasnije.
 - Tko želi oznake formata, kopira ih iz Notepada ili kroz **Spremi kao…**; kopiranje iz aplikacije nikad ne šalje znakove formata kao tekst.
+
+---
+
+## 5. Traži i zamijeni
+
+- Kao Ctrl+F i Ctrl+H u Notepadu, iz izbornika **⋯**: traži, sljedeće i prethodno, velika i mala slova, zamijeni jedno ili sve.
+- Traži se tekst kakav se vidi. Tablice i sadržaj zatvorenih mapa zasad se preskaču: što se ne vidi, ne mijenja se.
+- Zamjena je izmjena kao svaka druga i poništava se s ↶.
+
+---
+
+## 6. Kvačice, mape i poveznice
+
+- **Kvačica** (□ ■) i **mapa** (► ▼) mijenjaju se jednim dodirom na znak. Mijenja se taj jedan znak u datoteci, pa je stanje zapisano i vidi se i u Notepadu. Zatvorena mapa skriva svoj sadržaj samo na ekranu.
+- Uvlaka se ne dodaje sama: razmake na početku retka upisuješ ti, kao na pisaćem stroju.
+- **Poveznica** se umeće iz **+**: tekst (odabrani tekst je prijedlog) i cilj, ime papira u mapi ili web adresa. Dok je kursor u poveznici, iznad trake stoji **Otvori**; poveznica se nikad ne otvara slučajnim dodirom. Web adresu otvara preglednik, jer Papir nema internet.
+
+---
+
+## 7. Slike i kutije teksta
+
+- **Slika** iz **+** ulazi u papir, a papir postaje paket `.pzp` (zip s tekstom i slikama). Ime papira se mijenja samo u nastavku, i aplikacija to kaže.
+- Slika i kutija dolaze na prvo slobodno mjesto ispod kursora.
+- **Pomicanje:** dodir na sliku pa **Pomakni**, strelicama do novog mjesta, i **Potvrdi**. Ništa se ne mijenja dok se ne potvrdi. Slika ne može stati na tekst ni na drugu sliku; tekst pri pomicanju ostaje na mjestu.
+- **Veličina** ide istim putem, strelicama. **Preimenuj** mijenja ime i u okviru i u paketu.
+- Tekst koji se piše nikad ne pomiče sliku: kad naleti na nju, nastavlja desno od nje.
+- **Kutija teksta** piše se kao ćelija: Enter je novi red, a kutija je široka koliko njezin najdulji red.
+
+---
+
+## 8. Popis funkcija
+
+| Funkcija | U datoteci | Od |
+|---|---|---|
+| Datum i vrijeme | običan tekst | 0.2 |
+| Podebljano, kurziv, veličine M L XL | oznake | 0.5 |
+| Tablica i okvir; redak, stupac, brisanje | zidovi od crta | 0.6, 0.7 |
+| Kopiranje s oblikovanjem | ništa (međuspremnik) | 0.7 |
+| Traži i zamijeni | ništa | 0.9 |
+| Kvačica | □ ■ | 0.9 |
+| Mapa (skrivanje) | ► ▼ i uvlaka | 0.9 |
+| Poveznica | →tekst│cilj← | 0.9 |
+| Slika | okvir ╔═╗ u paketu .pzp | 0.9 |
+| Kutija teksta | okvir ╒═╕ | 0.9 |
+
+Odbijeno: štoperica (ne pripada bilježnici), veličine S i XS (izbačene u 0.9), povlačenje zidova tablice i oznaka prijeloma (0.8). Datum i vrijeme ostaje dok vlasnik ne odluči drugačije.

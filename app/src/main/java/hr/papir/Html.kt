@@ -23,8 +23,6 @@ object Html {
             val (od, doo) = when (velicina) {
                 2 -> "<h1>" to "</h1>"
                 1 -> "<h2>" to "</h2>"
-                -1 -> "<div><small>" to "</small></div>"
-                -2 -> "<div><small><small>" to "</small></small></div>"
                 else -> "<div>" to "</div>"
             }
             sb.append(od)
@@ -36,7 +34,19 @@ object Html {
         return sb.toString()
     }
 
-    /** Podebljano i kurziv kao pravilno ugniježđene oznake, najmanje koliko treba. */
+    private fun bijeg(s: String, sb: StringBuilder) {
+        for (c in s) {
+            when (c) {
+                '&' -> sb.append("&amp;")
+                '<' -> sb.append("&lt;")
+                '>' -> sb.append("&gt;")
+                '"' -> sb.append("&quot;")
+                else -> sb.append(c)
+            }
+        }
+    }
+
+    /** Podebljano i kurziv kao pravilno ugniježđene oznake, najmanje koliko treba; poveznica unutra. */
     private fun redak(linija: String, st: List<Stil>, sb: StringBuilder) {
         val otvoreni = ArrayList<Char>() // 'b' ili 'i', redom otvaranja
         fun zatvoriDo(n: Int) {
@@ -46,9 +56,16 @@ object Html {
             sb.append(if (x == 'b') "<b>" else "<i>")
             otvoreni.add(x)
         }
+        var poveznica: String? = null
+        fun zatvoriPoveznicu() {
+            if (poveznica != null) sb.append("</a>")
+            poveznica = null
+        }
         for (k in linija.indices) {
             fun zeli(x: Char) = if (x == 'b') st[k].podebljano else st[k].kurziv
             val prvi = otvoreni.indexOfFirst { !zeli(it) }
+            val promjena = prvi >= 0 || (st[k].podebljano && 'b' !in otvoreni) || (st[k].kurziv && 'i' !in otvoreni)
+            if (poveznica != null && (st[k].poveznica != poveznica || promjena)) zatvoriPoveznicu()
             if (prvi >= 0) {
                 val iznad = otvoreni.subList(prvi + 1, otvoreni.size).toList()
                 zatvoriDo(prvi)
@@ -56,14 +73,16 @@ object Html {
             }
             if (st[k].podebljano && 'b' !in otvoreni) otvori('b')
             if (st[k].kurziv && 'i' !in otvoreni) otvori('i')
-            when (val c = linija[k]) {
-                '&' -> sb.append("&amp;")
-                '<' -> sb.append("&lt;")
-                '>' -> sb.append("&gt;")
-                '"' -> sb.append("&quot;")
-                else -> sb.append(c)
+            val cilj = st[k].poveznica
+            if (cilj != null && poveznica == null) {
+                sb.append("<a href=\"")
+                bijeg(cilj, sb)
+                sb.append("\">")
+                poveznica = cilj
             }
+            bijeg(linija[k].toString(), sb)
         }
+        zatvoriPoveznicu()
         zatvoriDo(0)
     }
 }

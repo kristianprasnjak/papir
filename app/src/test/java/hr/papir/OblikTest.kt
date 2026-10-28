@@ -30,8 +30,7 @@ class OblikTest {
     fun primjerOblikovanje() {
         val p = Oblik.citaj(primjer("oblikovanje.txt"))
         assertEquals(
-            "Palačinke\n\nSastojci\n200 g brašna, glatkog\nIvica je rekao 2+2=5\nNe zaboraviti kruh\n" +
-                "može i s malo mineralne vode\njoš sitnije",
+            "Palačinke\n\nSastojci\n200 g brašna, glatkog\nIvica je rekao 2+2=5\nNe zaboraviti kruh",
             p.tekst,
         )
         assertEquals(Stil(velicina = 2), stilOd(p, "Palačinke"))
@@ -40,8 +39,6 @@ class OblikTest {
         assertEquals(B, stilOd(p, "glatkog"))
         assertEquals(I, stilOd(p, "2+2=5"))
         assertEquals(Stil(true, true), stilOd(p, "Ne zaboraviti kruh"))
-        assertEquals(Stil(velicina = -1), stilOd(p, "može i s malo mineralne vode"))
-        assertEquals(Stil(velicina = -2), stilOd(p, "još sitnije"))
     }
 
     @Test
@@ -97,11 +94,11 @@ class OblikTest {
     fun nediraniRetciOstajuDoslovnoIsti() {
         val sirovo = primjer("rucno-pisano.txt")
         val p = Oblik.citaj(sirovo)
-        assertEquals("Prvi redak\nDrugi redak\nsitno", p.tekst)
+        assertEquals("Prvi redak\nDrugi redak\ntreći", p.tekst)
         val novi = p.tekst.replace("Drugi redak", "Drugi redak!")
         val st = Oblik.prilagodi(p.tekst, p.stilovi, novi)
         val z = Oblik.zapisi(novi, st, p.linije)
-        assertEquals("▐Prvi▌▐ redak▌\nDrugi redak!\n░ ▐sitno▌\n\n─── papir 1 ───", z.sirovo)
+        assertEquals("▐Prvi▌▐ redak▌\nDrugi redak!\n▐tre▌▐ći▌\n\n─── papir 1 ───", z.sirovo)
         // bez izvora pisač bi prvi redak napisao u najkraćem obliku
         assertTrue(Oblik.zapisi(novi, st).sirovo.startsWith("▐Prvi redak▌\n"))
     }
@@ -174,8 +171,10 @@ class OblikTest {
         val t = "Naslov\ntekst"
         val st = Oblik.primijeni(t, obicno(t), 0, 6) { it.copy(velicina = 2) }
         assertEquals("Naslov\n══════\ntekst\n\n${Oblik.KLJUC}", Oblik.zapisi(t, st).sirovo)
-        val st2 = Oblik.primijeni(t, obicno(t), 7, 12) { it.copy(velicina = -1) }
-        assertEquals("Naslov\n░ tekst\n\n${Oblik.KLJUC}", Oblik.zapisi(t, st2).sirovo)
+        val st2 = Oblik.primijeni(t, obicno(t), 7, 12) { it.copy(velicina = 1) }
+        assertEquals("Naslov\ntekst\n─────\n\n${Oblik.KLJUC}", Oblik.zapisi(t, st2).sirovo)
+        // S i XS više ne postoje (0.9): ░ je običan znak
+        assertEquals("░ sitno", Oblik.citaj("░ sitno\n▐a▌\n\n${Oblik.KLJUC}").tekst.substringBefore("\n"))
     }
 
     @Test
@@ -231,5 +230,42 @@ class OblikTest {
     fun dijeloviZaPrikaz() {
         val d = Oblik.dijelovi(listOf(Stil.OBICNO, B, B, I, Stil.OBICNO))
         assertEquals(listOf(Triple(1, 3, B), Triple(3, 4, I)), d)
+    }
+
+    @Test
+    fun poveznica() {
+        val k = Oblik.KLJUC
+        val p = Oblik.citaj("Vidi →recept za tortu│Torta.pap← i ▐→pekaru│https://pekara.hr←▌.\n\n$k")
+        assertEquals("Vidi recept za tortu i pekaru.", p.tekst)
+        assertEquals(Stil(poveznica = "Torta.pap"), stilOd(p, "recept za tortu"))
+        assertEquals(Stil(podebljano = true, poveznica = "https://pekara.hr"), stilOd(p, "pekaru"))
+        assertEquals(Stil.OBICNO, stilOd(p, " i "))
+        // zapis je isti
+        assertEquals("Vidi →recept za tortu│Torta.pap← i ▐→pekaru│https://pekara.hr←▌.\n\n$k", Oblik.zapisi(p.tekst, p.stilovi).sirovo)
+        // nepotpuna poveznica je tekst
+        for (t in listOf("→a│←", "→│x←", "→a│x", "a│x←")) {
+            assertEquals(t, Oblik.citaj("$t\n▐b▌\n\n$k").tekst.substringBefore("\n"))
+        }
+        // prva strelica bez para je tekst, a iza nje počinje ispravna poveznica
+        assertEquals("→ab", Oblik.citaj("→a→b│x←\n\n$k").tekst)
+        // znakovi unutar teksta poveznice su tekst
+        val q = Oblik.citaj("→▐a▌│x←\n\n$k")
+        assertEquals("▐a▌", q.tekst)
+        assertEquals(Stil(poveznica = "x"), q.stilovi[1])
+        // poveznica je funkcija: papir dobiva ključ
+        val t = "kruh"
+        assertEquals("→kruh│Kruh.pap←\n\n$k", Oblik.zapisi(t, List(4) { Stil(poveznica = "Kruh.pap") }).sirovo)
+    }
+
+    @Test
+    fun kvaciceIMapeCuvajuKljuc() {
+        val k = Oblik.KLJUC
+        val sirovo = "▼ Kupovina\n  □ kruh\n  ■ mlijeko\n\n$k"
+        val p = Oblik.citaj(sirovo)
+        assertEquals("▼ Kupovina\n  □ kruh\n  ■ mlijeko", p.tekst)
+        assertEquals(sirovo, Oblik.zapisi(p.tekst, p.stilovi, p.linije, p.kljuc).sirovo)
+        // bez ključa su obična slova i ključ ne nastaje sam
+        val goli = "□ kruh\n■ mlijeko"
+        assertEquals(goli, Oblik.zapisi(goli, List(goli.length) { Stil.OBICNO }).sirovo)
     }
 }

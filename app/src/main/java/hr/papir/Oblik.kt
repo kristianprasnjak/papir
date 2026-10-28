@@ -2,15 +2,16 @@ package hr.papir
 
 /**
  * Oblikovanje jednog znaka (STANDARD.md, 3).
- * Podebljano i kurziv vrijede za znak; veličina za cijeli redak
- * (-2 XS, -1 S, 0 M zadano, 1 L, 2 XL).
+ * Podebljano, kurziv i poveznica vrijede za znak; veličina za cijeli redak
+ * (0 M zadano, 1 L, 2 XL). [poveznica] je cilj poveznice (STANDARD.md, 5.3) ili null.
  */
 data class Stil(
     val podebljano: Boolean = false,
     val kurziv: Boolean = false,
     val velicina: Int = 0,
+    val poveznica: String? = null,
 ) {
-    val obicno: Boolean get() = !podebljano && !kurziv && velicina == 0
+    val obicno: Boolean get() = !podebljano && !kurziv && velicina == 0 && poveznica == null
 
     companion object {
         val OBICNO = Stil()
@@ -41,8 +42,13 @@ object Oblik {
     const val KURZIV_DO = '›' // U+203A, Alt+0155
     const val CRTA_XL = '═' // U+2550, Alt+205
     const val CRTA_L = '─' // U+2500, Alt+196
-    const val SITNO = "░ " // U+2591, Alt+176
-    const val SITNIJE = "░░ "
+    const val POVEZNICA_OD = '→' // U+2192, Alt+26
+    const val POVEZNICA_CILJ = '│' // U+2502, Alt+179
+    const val POVEZNICA_DO = '←' // U+2190, Alt+27
+
+    /** Prepoznaje li se poveznica: cilj ne smije biti prazan ni sadržavati znakove poveznice ni novi red. */
+    fun ispravanCilj(cilj: String): Boolean =
+        cilj.isNotEmpty() && cilj.none { it == POVEZNICA_OD || it == POVEZNICA_DO || it == POVEZNICA_CILJ || it == '\n' }
 
     /** Jedan pročitani redak: što se vidi, kako je oblikovano, i točan izvorni tekst (s crtom naslova). */
     class Linija(val tekst: String, val stilovi: List<Stil>, val izvor: String)
@@ -60,7 +66,14 @@ object Oblik {
         val kljuc: Boolean = false,
         /** Broj formata iz ključa; 0 ako ključa nema. */
         val format: Int = 0,
+        /** Slike i kutije na mreži (STANDARD.md, 6). */
+        val objekti: List<Objekt> = emptyList(),
+        /** Sirovi retci s objektima, da pisač nedirane zapiše doslovno. */
+        val mreza: Mreza? = null,
     )
+
+    /** Retci tijela kakvi su bili u datoteci: tekući (bez objekata) i sirovi (s njima), i objekti. */
+    class Mreza(val tekuci: List<String>, val sirovi: List<String>, val objekti: List<Objekt>)
 
     class Zapisano(
         val sirovo: String,
@@ -89,7 +102,31 @@ object Oblik {
     // --- Čitač ---
 
     fun citaj(sirovo: String): Procitano {
-        val (body, format) = razdvoji(sirovo) ?: return goliTekst(sirovo)
+        val (tijelo, format) = razdvoji(sirovo) ?: return goliTekst(sirovo)
+        val retci = tijelo.split("\n")
+        val objekti = Objekti.nadji(retci)
+        if (objekti.isEmpty()) return citajTijelo(tijelo, sirovo.length, format)
+
+        // Slike i kutije su na mreži; tekst teče oko njih. Čita se tekst bez njih.
+        val izv = Objekti.izvuci(retci, objekti)
+        val tekuce = izv.retci.joinToString("\n")
+        val p = citajTijelo(tekuce, tekuce.length, format)
+        val mapa = IntArray(sirovo.length + 1)
+        var o = 0
+        var t = 0
+        for ((k, red) in retci.withIndex()) {
+            for (i in 0..red.length) mapa[o + i] = p.izSirovog[t + izv.mape[k][i]]
+            o += red.length + 1
+            t += izv.retci[k].length + 1
+        }
+        for (k in tijelo.length..sirovo.length) mapa[k] = p.tekst.length
+        return Procitano(
+            p.tekst, p.stilovi, mapa, p.linije, p.tablice, kljuc = true, format = format,
+            objekti = objekti, mreza = Mreza(izv.retci, retci, objekti),
+        )
+    }
+
+    private fun citajTijelo(body: String, ukupno: Int, format: Int): Procitano {
 
         val redovi = body.split("\n")
         val pocetci = IntArray(redovi.size)
@@ -101,7 +138,7 @@ object Oblik {
 
         val sb = StringBuilder(body.length)
         val stilovi = ArrayList<Stil>(body.length)
-        val mapa = IntArray(sirovo.length + 1)
+        val mapa = IntArray(ukupno + 1)
         val linije = ArrayList<Linija>()
         val tablice = Tablice.nadji(redovi)
         val tabliceCisto = ArrayList<IntRange>()
@@ -135,7 +172,6 @@ object Oblik {
             val red = redovi[i]
             val sljedeci = redovi.getOrNull(i + 1)
             var velicina = 0
-            var prefiks = 0
             var redova = 1
             when {
                 sljedeci != null && jeNaslov(red, sljedeci, CRTA_XL) -> {
@@ -146,18 +182,9 @@ object Oblik {
                     velicina = 1
                     redova = 2
                 }
-                red.startsWith(SITNIJE) -> {
-                    velicina = -2
-                    prefiks = SITNIJE.length
-                }
-                red.startsWith(SITNO) -> {
-                    velicina = -1
-                    prefiks = SITNO.length
-                }
             }
             val pocetakLinije = sb.length
-            for (k in 0 until prefiks) mapa[pocetci[i] + k] = sb.length
-            citajRedak(red, prefiks, pocetci[i], velicina, sb, stilovi, mapa)
+            citajRedak(red, pocetci[i], velicina, sb, stilovi, mapa)
             var izvor = red
             if (redova == 2) {
                 // prijelom i crta naslova pripadaju naslovu: preslikavaju se na kraj njegova teksta
@@ -169,7 +196,7 @@ object Oblik {
             linije.add(Linija(sb.substring(pocetakLinije), stilovi.subList(pocetakLinije, sb.length).toList(), izvor))
             i += redova
         }
-        for (k in body.length..sirovo.length) mapa[k] = sb.length
+        for (k in body.length..ukupno) mapa[k] = sb.length
         return Procitano(sb.toString(), stilovi, mapa, linije, tabliceCisto, kljuc = true, format = format)
     }
 
@@ -191,10 +218,11 @@ object Oblik {
         red.isNotBlank() && !jeBiloKojaCrta(red) && jeCrta(crta, znak) && duljina(crta) == duljina(red)
 
     /** Parovi otvaranja i zatvaranja jedne vrste u retku; ponovljeno otvaranje poništava ranije. */
-    private fun parovi(red: String, od: Int, otvori: Char, zatvori: Char): List<IntRange> {
+    private fun parovi(red: String, otvori: Char, zatvori: Char, uPoveznici: BooleanArray): List<IntRange> {
         val out = ArrayList<IntRange>()
         var otvoren = -1
-        for (k in od until red.length) {
+        for (k in red.indices) {
+            if (uPoveznici[k]) continue
             val c = red[k]
             if (c == otvori) {
                 otvoren = k
@@ -210,17 +238,49 @@ object Oblik {
         (a.first < b.first && b.first < a.last && a.last < b.last) ||
             (b.first < a.first && a.first < b.last && b.last < a.last)
 
+    /** Poveznice u retku: (cijeli raspon od → do ←, kraj prikazanog teksta, cilj). */
+    private fun poveznice(red: String): List<Triple<IntRange, Int, String>> {
+        val out = ArrayList<Triple<IntRange, Int, String>>()
+        var k = 0
+        while (k < red.length) {
+            if (red[k] != POVEZNICA_OD) {
+                k++
+                continue
+            }
+            val crta = red.indexOf(POVEZNICA_CILJ, k + 1)
+            val kraj = if (crta < 0) -1 else red.indexOf(POVEZNICA_DO, crta + 1)
+            val tekst = if (crta < 0) "" else red.substring(k + 1, crta)
+            val cilj = if (kraj < 0) "" else red.substring(crta + 1, kraj)
+            if (kraj < 0 || tekst.isEmpty() || tekst.any { it == POVEZNICA_OD || it == POVEZNICA_DO } || !ispravanCilj(cilj)) {
+                k++
+                continue
+            }
+            out.add(Triple(k..kraj, crta, cilj))
+            k = kraj + 1
+        }
+        return out
+    }
+
     private fun citajRedak(
         red: String,
-        prefiks: Int,
         pocetak: Int,
         velicina: Int,
         sb: StringBuilder,
         stilovi: MutableList<Stil>,
         mapa: IntArray,
     ) {
-        val podebljano = parovi(red, prefiks, PODEBLJANO_OD, PODEBLJANO_DO)
-        val kurziv = parovi(red, prefiks, KURZIV_OD, KURZIV_DO).filter { k -> podebljano.none { krizaju(it, k) } }
+        val pov = poveznice(red)
+        val uPoveznici = BooleanArray(red.length)
+        val skriveno = BooleanArray(red.length)
+        val cilj = arrayOfNulls<String>(red.length)
+        for ((raspon, crta, c) in pov) {
+            for (k in raspon) uPoveznici[k] = true
+            skriveno[raspon.first] = true
+            for (k in crta..raspon.last) skriveno[k] = true
+            for (k in raspon.first + 1 until crta) cilj[k] = c
+        }
+        val podebljano = parovi(red, PODEBLJANO_OD, PODEBLJANO_DO, uPoveznici)
+        val kurziv = parovi(red, KURZIV_OD, KURZIV_DO, uPoveznici).filter { k -> podebljano.none { krizaju(it, k) } }
 
         val oznaka = BooleanArray(red.length)
         val jePodebljano = BooleanArray(red.length)
@@ -235,11 +295,11 @@ object Oblik {
             oznaka[p.last] = true
             for (k in p.first + 1 until p.last) jeKurziv[k] = true
         }
-        for (k in prefiks until red.length) {
+        for (k in red.indices) {
             mapa[pocetak + k] = sb.length
-            if (oznaka[k]) continue
+            if (oznaka[k] || skriveno[k]) continue
             sb.append(red[k])
-            stilovi.add(Stil(jePodebljano[k], jeKurziv[k], velicina))
+            stilovi.add(Stil(jePodebljano[k], jeKurziv[k], velicina, cilj[k]))
         }
     }
 
@@ -258,7 +318,7 @@ object Oblik {
      *
      * [format] je broj iz ključa pročitane datoteke. Pisač ga nikad ne smanjuje, a papir novijeg
      * formata uvijek zadržava ključ, jer u njemu mogu biti oznake koje ovaj pisač ne poznaje
-     * (STANDARD.md, 7).
+     * (STANDARD.md, 8).
      */
     fun zapisi(
         tekst: String,
@@ -266,6 +326,8 @@ object Oblik {
         prethodne: List<Linija> = emptyList(),
         kljuc: Boolean = false,
         format: Int = 0,
+        objekti: List<Objekt> = emptyList(),
+        mreza: Mreza? = null,
     ): Zapisano {
         val noviji = format > FORMAT
         val mapa = IntArray(tekst.length + 1)
@@ -300,7 +362,10 @@ object Oblik {
         val uTablici = BooleanArray(linije.size)
         if (kljuc || noviji || imaOblikovanje) for (t in Tablice.nadji(linije)) for (k in t) uTablici[k] = true
         val imaTablicu = uTablici.any { it }
-        val oblikovano = noviji || imaOblikovanje || imaTablicu ||
+        // kvačice i mape su živi znakovi: žive samo u papiru s ključem, i taj ključ čuvaju
+        val imaZivih = (kljuc || imaOblikovanje) && linije.any { Mape.jeKvacica(it) || Mape.zaglavlje(it) != null }
+        val imaObjekte = objekti.isNotEmpty()
+        val oblikovano = noviji || imaOblikovanje || imaTablicu || imaZivih || imaObjekte ||
             linije.indices.any { izvor[it] != null && izvor[it] != linije[it] }
         if (!oblikovano) {
             for (k in mapa.indices) mapa[k] = k
@@ -326,20 +391,60 @@ object Oblik {
         }
         mapa[tekst.length] = sb.length
         // Ako nijedan redak nije dobio nijednu oznaku (npr. „naslov" od samih razmaka), papir je goli tekst.
-        if (!noviji && !imaTablicu && sb.length == tekst.length && sb.toString() == tekst) {
+        if (!noviji && !imaTablicu && !imaZivih && !imaObjekte && sb.length == tekst.length && sb.toString() == tekst) {
             for (k in mapa.indices) mapa[k] = k
             return Zapisano(tekst, mapa)
         }
+        if (imaObjekte) return saObjektima(sb.toString(), mapa, objekti, mreza, format)
         sb.append("\n\n").append(kljuc(maxOf(format, FORMAT)))
         return Zapisano(sb.toString(), mapa)
     }
 
+    /**
+     * Postavlja slike i kutije na mrežu preko tekućeg tijela. Redak čiji se tekst i objekti nisu
+     * promijenili zapisuje se doslovno kakav je bio u datoteci.
+     */
+    private fun saObjektima(tekuce: String, mapa: IntArray, objekti: List<Objekt>, mreza: Mreza?, format: Int): Zapisano {
+        val retci = tekuce.split("\n")
+        val um = Objekti.umetni(retci, objekti)
+        val konacni = um.retci.toMutableList()
+        if (mreza != null) {
+            for (k in konacni.indices) {
+                val isti = k < mreza.tekuci.size && k < mreza.sirovi.size &&
+                    retci.getOrElse(k) { "" } == mreza.tekuci[k] &&
+                    objekti.filter { k in it.redak..it.zadnjiRedak } == mreza.objekti.filter { k in it.redak..it.zadnjiRedak }
+                if (isti) konacni[k] = mreza.sirovi[k]
+            }
+        }
+        val sb = StringBuilder()
+        val pocetakTekuceg = IntArray(retci.size)
+        val pocetakKonacnog = IntArray(konacni.size)
+        var o = 0
+        for (k in retci.indices) {
+            pocetakTekuceg[k] = o
+            o += retci[k].length + 1
+        }
+        for (k in konacni.indices) {
+            if (k > 0) sb.append('\n')
+            pocetakKonacnog[k] = sb.length
+            sb.append(konacni[k])
+        }
+        // pozicije: čisti tekst → tekuće tijelo → konačno tijelo (doslovni retci približno)
+        val nova = IntArray(mapa.size)
+        for (i in mapa.indices) {
+            val t = mapa[i]
+            var k = retci.size - 1
+            while (k > 0 && pocetakTekuceg[k] > t) k--
+            val u = (t - pocetakTekuceg[k]).coerceIn(0, retci[k].length)
+            val m = if (konacni[k] == um.retci[k]) um.mape[k][u] else minOf(u, konacni[k].length)
+            nova[i] = pocetakKonacnog[k] + m
+        }
+        sb.append("\n\n").append(kljuc(maxOf(format, FORMAT)))
+        return Zapisano(sb.toString(), nova)
+    }
+
     private fun zapisiLiniju(linija: String, st: List<Stil>, off: Int, sb: StringBuilder, mapa: IntArray) {
         val velicina = if (linija.isEmpty()) 0 else st[0].velicina
-        when (velicina) {
-            -1 -> sb.append(SITNO)
-            -2 -> sb.append(SITNIJE)
-        }
         val redakStart = sb.length
         zapisiRedak(linija, st, off, sb, mapa)
         if (velicina > 0) {
@@ -363,11 +468,23 @@ object Oblik {
                 sb.append(if (x == 'b') PODEBLJANO_DO else KURZIV_DO)
             }
         }
+        var poveznica: String? = null
+        fun zatvoriPoveznicu() {
+            poveznica?.let { sb.append(POVEZNICA_CILJ).append(it).append(POVEZNICA_DO) }
+            poveznica = null
+        }
         for (k in linija.indices) {
             val b = st[k].podebljano
             val i = st[k].kurziv
+            val znak = linija[k]
+            // znakovi poveznice ne mogu biti dio njezina teksta
+            val cilj = st[k].poveznica?.takeIf {
+                ispravanCilj(it) && znak != POVEZNICA_OD && znak != POVEZNICA_DO && znak != POVEZNICA_CILJ
+            }
             fun zeli(x: Char) = if (x == 'b') b else i
             val prvi = otvoreni.indexOfFirst { !zeli(it) }
+            val promjena = prvi >= 0 || (b && 'b' !in otvoreni) || (i && 'k' !in otvoreni)
+            if (poveznica != null && (cilj != poveznica || promjena)) zatvoriPoveznicu()
             if (prvi >= 0) {
                 val iznad = otvoreni.subList(prvi + 1, otvoreni.size).toList()
                 zatvoriDo(prvi)
@@ -375,9 +492,14 @@ object Oblik {
             }
             if (b && 'b' !in otvoreni) otvori('b')
             if (i && 'k' !in otvoreni) otvori('k')
+            if (cilj != null && poveznica == null) {
+                sb.append(POVEZNICA_OD)
+                poveznica = cilj
+            }
             mapa[off + k] = sb.length
-            sb.append(linija[k])
+            sb.append(znak)
         }
+        zatvoriPoveznicu()
         zatvoriDo(0)
     }
 

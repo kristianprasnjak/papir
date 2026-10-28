@@ -13,12 +13,18 @@
 | **Prikaz** | papir → ekran: crta značenje, nikad znakove oznaka; slobodan izbor fonta (jednake širine), mjera i boja | `MainActivity` |
 | **Tablice** | prepoznavanje, čitanje i crtanje tablica (STANDARD.md, 4); radnje s retcima i stupcima; u čistom tekstu tablica stoji doslovno | `Tablica.kt` |
 | **Kopiranje** | odabir → goli tekst + HTML s pravim oblikovanjem (PAPIR.md, 4) | `Html.kt`, `PapirClipboard` |
+| **Mreža** | slike i kutije na točnom mjestu; tekst teče desno od njih; izvlačenje prije čitanja, umetanje nakon pisanja | `Objekti.kt` |
+| **Mape i kvačice** | živi znakovi na početku retka, sadržaj mape po uvlaci, skriveni retci | `Mape.kt` |
+| **Paket** | `.pzp`: zip s jednim papirom i slikama; isti sadržaj daje iste bajtove | `Paket.kt` |
+| **Traženje** | traži i zamijeni nad tekstom koji se vidi | `Trazi.kt` |
 
 Čitač i pisač su čista logika bez Androida: dobiju tekst, vrate tekst. Zato se mogu iscrpno testirati.
 
 **Dva zakona pisača:**
 1. Što pisač napiše, čitač pročita točno isto.
 2. Pisač dira samo ono što se promijenilo. Svaki pročitani redak pamti svoj izvorni tekst; ako se nije promijenio, u datoteku ide doslovno taj izvornik.
+
+**Mreža:** čitač prvo nađe okvire slika i kutija, izvadi ih iz redaka i spoji ostatak (tekst koji teče oko njih), pa tek onda čita oblikovanje i tablice. Pisač radi obrnuto: napiše tekst, pa okvire postavi na mrežu. Redak čiji se tekst i okviri nisu promijenili ide u datoteku doslovno.
 
 **Ključ s brojem:** čitač čita `─── papir N ───` za svaki N i pamti broj (`Procitano.format`). Pisač zapisuje veći od tog broja i svog (1), a papiru novijeg formata nikad ne skida ključ, jer u njemu mogu biti oznake koje ne poznaje (STANDARD.md, 7).
 
@@ -49,6 +55,7 @@ Spremanje (s provjerom promjene izvana), sukobi i poništavanje rade nad txt-om,
 | 0.6 | Prepoznavanje i prikaz tablica; tipkanje u ćeliju, Enter u ćeliji, širenje stupca; nova tablica iz izbornika |
 | 0.7 | Standard odvojen od aplikacije; ključ s brojem; `Note.pap`; kopiranje u dvije verzije; dodavanje i brisanje redaka i stupaca, brisanje tablice |
 | 0.8 | Tablica kao pisaći stroj: stupac je točno širok koliko najdulji red, s razmacima; bez povlačenja zidova i bez oznake prijeloma |
-| kasnije | „Popravi tablicu", datum u ćeliji, oblikovanje u ćeliji |
+| 0.9 | Manifest; bez S i XS; traži i zamijeni; kvačica; mape; poveznica; slike u paketu `.pzp`; kutije teksta; papir bez prelamanja |
+| kasnije | „Popravi tablicu", datum u ćeliji, oblikovanje u ćeliji, lijepljenje s oblikovanjem, traženje u tablicama |
 
 Dogovoreno za tablice (STANDARD.md, 4): zidovi od tankih linija `┌ ┬ ┐ │ ├ ┼ ┤ └ ┴ ┘ ─`, dvostruka crta `╞ ═ ╪ ╡` ispod zaglavlja, crta između svaka dva retka tablice. Ćelija je pisaći stroj: Enter je jedini prijelom; riječi i razmaci šire stupac, a stupac je uvijek točno širok koliko najdulji red. Povlačenje zidova i oznaka prijeloma `↓` su odbačeni (vlasnik, 0.8): sve je u slovima i razmacima.

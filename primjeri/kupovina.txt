@@ -1,0 +1,9 @@
+Kupovina                ╒═════════════╕
+▼ Pekara                │ ne zaboravi │
+  □ kruh                │ kartice!    │
+  ■ kifle               ╘═════════════╛
+► Tržnica
+  □ rajčica
+Recept: →torta│Torta.pap←
+
+─── papir 1 ───

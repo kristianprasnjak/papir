@@ -27,12 +27,9 @@ class HtmlTest {
 
     @Test
     fun velicine() {
-        val t = "N\nP\ns\nx"
-        val st = listOf(Stil(velicina = 2), O, Stil(velicina = 1), O, Stil(velicina = -1), O, Stil(velicina = -2))
-        assertEquals(
-            omot("<h1>N</h1><h2>P</h2><div><small>s</small></div><div><small><small>x</small></small></div>"),
-            Html.iz(t, st),
-        )
+        val t = "N\nP\nx"
+        val st = listOf(Stil(velicina = 2), O, Stil(velicina = 1), O, O)
+        assertEquals(omot("<h1>N</h1><h2>P</h2><div>x</div>"), Html.iz(t, st))
     }
 
     @Test
@@ -42,9 +39,12 @@ class HtmlTest {
 
     @Test
     fun nikadZnakoviFormata() {
-        val p = Oblik.citaj("Naslov\n══════\n▐kruh▌ i ‹mlijeko›\n░ sitno\n\n${Oblik.KLJUC}")
+        val p = Oblik.citaj("Naslov\n══════\n▐kruh▌ i ‹mlijeko›\nVidi →recept│Torta.pap←\n\n${Oblik.KLJUC}")
         val h = Html.iz(p.tekst, p.stilovi)
-        for (c in "▐▌‹›═─░") assertTrue("„$c“ u $h", c !in h)
-        assertEquals(omot("<h1>Naslov</h1><div><b>kruh</b> i <i>mlijeko</i></div><div><small>sitno</small></div>"), h)
+        for (c in "▐▌‹›═─→←│") assertTrue("„$c“ u $h", c !in h)
+        assertEquals(
+            omot("<h1>Naslov</h1><div><b>kruh</b> i <i>mlijeko</i></div><div>Vidi <a href=\"Torta.pap\">recept</a></div>"),
+            h,
+        )
     }
 }
