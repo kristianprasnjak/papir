@@ -782,7 +782,6 @@ private fun MessageLine(text: String, onDismiss: () -> Unit) {
     )
 }
 
-@Composable
 /** Visina jednog retka mreže (sp): jedan redak datoteke je jedan redak ekrana. */
 private const val RED = 26
 
