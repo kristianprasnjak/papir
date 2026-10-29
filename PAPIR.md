@@ -26,7 +26,9 @@ Ustav je iznad svakog zahtjeva za funkcijom. Ako se funkcija ne može napraviti 
 ## 2. Upravljanje
 
 - **Svaka kontrola mijenja ili datoteku ili samo prikaz, i to se mora znati.** B, I, veličina, tablica, kvačica, mapa, poveznica, slika, kutija i datum mijenjaju datoteku. Pomicanje papira i traženje ne mijenjaju ništa.
-- **Papir se ne prelama**, kao u Notepadu: dugačak redak ide udesno, a papir se pomiče i vodoravno. Ekran je točno mreža iz datoteke, pa slike i kutije stoje gdje stoje i u Notepadu.
+- **Papir se ne prelama**, kao u Notepadu: dugačak redak ide udesno, a papir se pomiče i vodoravno.
+- **Jedan redak datoteke je jedan redak ekrana**, svi iste visine. Naslov zauzima svoja dva (tekst i crtu), a tablica svoje (i crte su retci, i zidovi stupci). Zato slike i kutije stoje na ekranu u istom retku kao u Notepadu.
+- **Napredno uređivanje je u Papiru.** Notepad otvara i piše. Ako u Notepadu netko pokvari okvir ili oznaku, Papir pokaže tekst, točno kako izgleda u Notepadu.
 - **Nema skrivenih načina rada.** Što je na ekranu, to je stanje; nema „uključenog" načina koji mijenja što tipke rade bez da se vidi.
 - **Ništa slučajno.** Nijedna gesta, dvostruki dodir ni duži pritisak ne umeće funkciju. Funkcija je uvijek dva namjerna dodira: **+**, pa funkcija.
 - **Sve se može poništiti.** Svaka izmjena, uključujući funkcije i radnje s tablicama, jedan je korak za ↶.
@@ -65,7 +67,8 @@ Ustav je iznad svakog zahtjeva za funkcijom. Ako se funkcija ne može napraviti 
 
 ## 6. Kvačice, mape i poveznice
 
-- **Kvačica** (□ ■) i **mapa** (► ▼) mijenjaju se jednim dodirom na znak. Mijenja se taj jedan znak u datoteci, pa je stanje zapisano i vidi se i u Notepadu. Zatvorena mapa skriva svoj sadržaj samo na ekranu.
+- **Kvačica** i **mapa** su na ekranu element sučelja: kvadratić (prazan ili s kvačicom) i strelica, s dodirnom površinom od prsta. U datoteci su znakovi □ ■ ► ▼. Dodir mijenja taj jedan znak u datoteci, pa je stanje zapisano i vidi se i u Notepadu. Zatvorena mapa skriva svoj sadržaj samo na ekranu.
+- Mapa se ne može zatvoriti dok slika ili kutija stoji uz njezin rub (dijelom uz sadržaj, dijelom izvan): tekst ispod bi je na ekranu presjekao. Slika koja je cijela uz sadržaj skrije se s njim.
 - Uvlaka se ne dodaje sama: razmake na početku retka upisuješ ti, kao na pisaćem stroju.
 - **Poveznica** se umeće iz **+**: tekst (odabrani tekst je prijedlog) i cilj, ime papira u mapi ili web adresa. Dok je kursor u poveznici, iznad trake stoji **Otvori**; poveznica se nikad ne otvara slučajnim dodirom. Web adresu otvara preglednik, jer Papir nema internet.
 
@@ -75,9 +78,12 @@ Ustav je iznad svakog zahtjeva za funkcijom. Ako se funkcija ne može napraviti 
 
 - **Slika** iz **+** ulazi u papir, a papir postaje paket `.pzp` (zip s tekstom i slikama). Ime papira se mijenja samo u nastavku, i aplikacija to kaže.
 - Slika i kutija dolaze na prvo slobodno mjesto ispod kursora.
-- **Pomicanje:** dodir na sliku pa **Pomakni**, strelicama do novog mjesta, i **Potvrdi**. Ništa se ne mijenja dok se ne potvrdi. Slika ne može stati na tekst ni na drugu sliku; tekst pri pomicanju ostaje na mjestu.
-- **Veličina** ide istim putem, strelicama. **Preimenuj** mijenja ime i u okviru i u paketu.
-- Tekst koji se piše nikad ne pomiče sliku: kad naleti na nju, nastavlja desno od nje.
+- **Na ekranu se slika i tekst nikad ne presijecaju.** Mjeri se ono što se vidi, uključujući veća slova naslova, a ne samo stupci u datoteci.
+- **Pomicanje:** dodir na sliku pa **Pomakni**, strelicama do novog mjesta, i **Potvrdi**. Ništa se ne mijenja dok se ne potvrdi. Slika ne može stati na tekst ni na drugu sliku.
+- **Veličina** ide istim putem, strelicama, uz isto pravilo. **Preimenuj** mijenja ime i u okviru i u paketu.
+- **Tekst koji se tipka nikad ne pomiče sliku:** sljedeće slovo koje naleti na sliku nastavlja odmah desno od nje, kao na papiru po kojem se ne piše preko slike. Riječ se tako može prelomiti na zidu slike. Kad se obrišu slova lijevo od slike, slova desno od nje primaknu se, jer je redak jedan tekst.
+- **Tekst se ne može povećati** (L, XL) ako bi na ekranu zauzeo mjesto slike ili kutije. Papir to odbije i kaže zašto.
+- **Redak dodan ili obrisan:** sve ispod se pomiče zajedno, i slike i kutije. Isto vrijedi kad redak iznad postane ili prestane biti naslov. Slika koja počinje u retku koji se mijenja ostaje u njemu.
 - **Kutija teksta** piše se kao ćelija: Enter je novi red, a kutija je široka koliko njezin najdulji red.
 
 ---

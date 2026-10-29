@@ -269,11 +269,13 @@ object Objekti {
      * ijednog slova teksta od njegova lijevog ruba nadesno u retcima koje zauzima.
      * [retci] su retci bez objekata (tekući tekst), [ostali] objekti bez ovoga.
      */
-    fun slobodno(o: Objekt, retci: List<String>, ostali: List<Objekt>): Boolean {
+    fun slobodno(o: Objekt, retci: List<String>, ostali: List<Objekt>, naEkranu: Map<Int, Int> = emptyMap()): Boolean {
         if (o.redak < 0 || o.stupac < 0) return false
         if (ostali.any { it.preklapa(o) }) return false
         val mreza = umetni(retci, ostali).retci
         for (r in o.redak..o.zadnjiRedak) {
+            // veća slova naslova na ekranu zauzimaju više stupaca nego u datoteci
+            if ((naEkranu[r] ?: 0) > o.stupac) return false
             val red = cp(mreza.getOrElse(r) { "" })
             for (x in o.stupac until red.size) {
                 val tudi = ostali.any { r in it.redak..it.zadnjiRedak && x in it.stupac..it.zadnjiStupac }
@@ -281,5 +283,43 @@ object Objekti {
             }
         }
         return true
+    }
+
+    /**
+     * Nakon izmjene teksta ili veličine redaka: objekt ispod izmijenjenog dijela pomiče se zajedno
+     * s retcima (PAPIR.md, 7). [stari] i [novi] su retci čistog teksta, a [redoviStarih] i
+     * [redoviNovih] koliko redaka mreže zauzima svaki od njih (naslov dva).
+     * Objekt čiji je gornji rub u izmijenjenom retku ostaje u tom retku.
+     */
+    fun pomakni(
+        objekti: List<Objekt>,
+        stari: List<String>,
+        novi: List<String>,
+        redoviStarih: List<Int>,
+        redoviNovih: List<Int>,
+    ): List<Objekt> {
+        if (objekti.isEmpty()) return objekti
+        var p = 0
+        while (p < stari.size && p < novi.size && stari[p] == novi[p]) p++
+        var k = 0
+        while (k < stari.size - p && k < novi.size - p && stari[stari.size - 1 - k] == novi[novi.size - 1 - k]) k++
+        val pocetakStarih = IntArray(stari.size + 1).also { a -> for (i in stari.indices) a[i + 1] = a[i] + redoviStarih.getOrElse(i) { 1 } }
+        val pocetakNovih = IntArray(novi.size + 1).also { a -> for (i in novi.indices) a[i + 1] = a[i] + redoviNovih.getOrElse(i) { 1 } }
+        return objekti.map { o ->
+            if (o.redak >= pocetakStarih[stari.size]) {
+                // ispod kraja teksta: pomak koliko se promijenio broj redaka
+                return@map o.copy(redak = maxOf(0, o.redak + pocetakNovih[novi.size] - pocetakStarih[stari.size]))
+            }
+            var linija = 0
+            while (linija + 1 <= stari.size && pocetakStarih[linija + 1] <= o.redak) linija++
+            val unutar = o.redak - pocetakStarih[linija]
+            val nova = when {
+                linija < p -> linija
+                linija >= stari.size - k -> linija + novi.size - stari.size
+                else -> minOf(linija, maxOf(novi.size - 1, 0))
+            }
+            val redova = redoviNovih.getOrElse(nova) { 1 }
+            o.copy(redak = pocetakNovih[nova.coerceIn(0, novi.size)] + minOf(unutar, redova - 1))
+        }
     }
 }

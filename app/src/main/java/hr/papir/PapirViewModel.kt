@@ -79,6 +79,9 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     /** Ima li papir ključ: tek tada se tablice prepoznaju i u tekstu koji se piše. */
     private var keyed = false
 
+    /** Žive funkcije (kvačice, mape) rade samo u papiru s ključem. */
+    val isKeyed: Boolean get() = keyed
+
     /** Broj formata iz ključa (0 bez ključa); noviji od poznatog se čuva (STANDARD.md, 8). */
     private var format = 0
 
@@ -242,9 +245,26 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Veličina je svojstvo retka: djeluje na sve retke koje odabir dodiruje (STANDARD.md, 3). */
-    fun setSize(velicina: Int) = restyle(wholeLine = true) { _ ->
-        val promjena: (Stil) -> Stil = { s -> s.copy(velicina = velicina) }
-        promjena
+    fun setSize(velicina: Int) {
+        if (velicina > 0 && objects.isNotEmpty() && !sizeFits(velicina)) {
+            message = "Veći tekst ovdje bi zauzeo mjesto slike ili kutije. Prvo pomakni nju."
+            return
+        }
+        restyle(wholeLine = true) { _ ->
+            val promjena: (Stil) -> Stil = { s -> s.copy(velicina = velicina) }
+            promjena
+        }
+    }
+
+    /** Bi li retci s kursorom kao naslov na ekranu dotaknuli sliku ili kutiju? */
+    private fun sizeFits(velicina: Int): Boolean {
+        val t = content.text
+        val a = t.lastIndexOf('\n', content.selection.min - 1) + 1
+        val b = t.indexOf('\n', content.selection.max).let { if (it < 0) t.length else it }
+        val st = Oblik.primijeni(t, styles, a, b) { it.copy(velicina = velicina) }
+        val pomaknuti = shiftedObjects(t, st)
+        val sirine = screenWidths(t, st)
+        return pomaknuti.all { o -> (o.redak..o.zadnjiRedak).all { r -> (sirine[r] ?: 0) <= o.stupac } }
     }
 
     private fun restyle(wholeLine: Boolean, makeChange: (List<Stil>) -> (Stil) -> Stil) {
@@ -273,7 +293,9 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
      * Postavlja tekst i stilove tako da su uvijek ono što bi se pročitalo iz datoteke
      * (datoteka je istina): ako je u tekstu s oblikovanjem nastala točna oznaka, ona postaje oznaka.
      */
-    private fun setModel(value: TextFieldValue, stilovi: List<Stil>, noviObjekti: List<Objekt> = objects) {
+    private fun setModel(value: TextFieldValue, stilovi: List<Stil>, zadaniObjekti: List<Objekt>? = null) {
+        // redak dodan ili obrisan, ili redak postao naslov: sve ispod se pomiče zajedno, i slike
+        val noviObjekti = zadaniObjekti ?: shiftedObjects(value.text, stilovi)
         val zapisano = Oblik.zapisi(value.text, stilovi, lines, keyed, format, noviObjekti, mreza)
         val procitano = Oblik.citaj(zapisano.sirovo)
         if (procitano.tekst == value.text) {
@@ -284,6 +306,44 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         }
         takeRead(zapisano.sirovo, procitano)
         refreshSearch()
+    }
+
+    /** Retci mreže koje zauzima svaki redak čistog teksta (naslov dva), za tekst i stilove. */
+    private fun rowsPerLine(tekst: String, stilovi: List<Stil>): List<Int> {
+        val z = Oblik.zapisi(tekst, stilovi, lines, keyed, format).sirovo
+        return Oblik.citaj(z).linije.map { it.izvor.count { c -> c == '\n' } + 1 }
+    }
+
+    private fun shiftedObjects(tekst: String, stilovi: List<Stil>): List<Objekt> {
+        if (objects.isEmpty()) return objects
+        val stari = content.text.split("\n")
+        val novi = tekst.split("\n")
+        val redoviStarih = lines.map { it.izvor.count { c -> c == '\n' } + 1 }
+        val redoviNovih = rowsPerLine(tekst, stilovi)
+        if (stari == novi && redoviStarih == redoviNovih) return objects
+        return Objekti.pomakni(objects, stari, novi, redoviStarih, redoviNovih)
+    }
+
+    /**
+     * Koliko stupaca zauzima tekst na ekranu, po retku mreže, gdje je više nego u datoteci:
+     * naslov ima veća slova (i njegova crta je dio naslova).
+     */
+    private fun screenWidths(tekst: String = content.text, stilovi: List<Stil> = styles): Map<Int, Int> {
+        val out = HashMap<Int, Int>()
+        val retci = tekst.split("\n")
+        val redovi = if (tekst == content.text && stilovi == styles) lines.map { it.izvor.count { c -> c == '\n' } + 1 } else rowsPerLine(tekst, stilovi)
+        var red = 0
+        var off = 0
+        for ((i, l) in retci.withIndex()) {
+            val v = stilovi.getOrNull(off)?.velicina ?: 0
+            if (v > 0 && l.isNotBlank()) {
+                val w = kotlin.math.ceil(l.codePointCount(0, l.length) * Stil.mjera(v)).toInt()
+                for (k in 0 until redovi.getOrElse(i) { 1 }) out[red + k] = w
+            }
+            red += redovi.getOrElse(i) { 1 }
+            off += l.length + 1
+        }
+        return out
     }
 
     /** Sve što se izvodi iz pročitanog txt-a: datoteka je istina. */
@@ -334,6 +394,31 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
                 out[cisto] = (out[cisto] ?: 0) + sirina
                 umetnuto[pocetakLinije] = vec + sirina
             }
+        }
+        // Naslov ima veća slova: na ekranu stigne do slike prije nego u datoteci. Sljedeće slovo
+        // nastavlja desno od slike tamo gdje bi je na ekranu dotaknulo.
+        var off = 0
+        var red = 0
+        for ((i, l) in p.tekst.split("\n").withIndex()) {
+            val v = p.stilovi.getOrNull(off)?.velicina ?: 0
+            if (v > 0 && l.isNotEmpty()) {
+                val m = Stil.mjera(v)
+                val uz = p.objekti.filter { red in it.redak..it.zadnjiRedak }.sortedBy { it.stupac }
+                if (uz.isNotEmpty()) {
+                    for (k in off..off + l.length) out.remove(k)
+                    var vec = 0
+                    for (ob in uz) {
+                        val iZnak = kotlin.math.floor(ob.stupac / m).toInt() - vec
+                        if (iZnak < 0 || iZnak >= l.length) continue
+                        val g = kotlin.math.ceil((ob.zadnjiStupac + 1) / m).toInt() - (iZnak + vec)
+                        if (g <= 0) continue
+                        out[off + iZnak] = (out[off + iZnak] ?: 0) + g
+                        vec += g
+                    }
+                }
+            }
+            red += p.linije.getOrNull(i)?.izvor?.count { it == '\n' }?.plus(1) ?: 1
+            off += l.length + 1
         }
         return out
     }
@@ -448,6 +533,20 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         val tekst = content.text
         val p = listOf(pozicija, pozicija - 1).firstOrNull { Mape.prebaci(tekst, it) != null } ?: return false
         val novi = Mape.prebaci(tekst, p)!!
+        if (novi[p] == Mape.ZATVORENO && objects.isNotEmpty()) {
+            // slika koja samo djelomično stoji uz sadržaj mape: na ekranu bi je tekst ispod presjekao
+            val r = novi.substring(0, p).count { it == '\n' }
+            val s = Mape.sadrzaj(novi.split("\n"), r)
+            if (!s.isEmpty()) {
+                val od = rawRowOfLine(s.first)
+                val doo = rawRowOfLine(s.last + 1) - 1
+                val djelomicno = objects.any { o -> o.redak <= doo && o.zadnjiRedak >= od && (o.redak < od || o.zadnjiRedak > doo) }
+                if (djelomicno) {
+                    message = "Mapa se ne može zatvoriti dok slika ili kutija stoji uz njezin rub."
+                    return false
+                }
+            }
+        }
         povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
         // zatvorena mapa: kursor iz skrivenog sadržaja ide na kraj zaglavlja
         var kursor = content.selection
@@ -600,7 +699,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         val od = rawRowOfLine(kursor) + 1
         for (r in od..retci.size + 1) {
             val kandidat = o.na(r, 0)
-            if (Objekti.slobodno(kandidat, retci, objects)) return kandidat
+            if (Objekti.slobodno(kandidat, retci, objects, screenWidths())) return kandidat
         }
         return o.na(retci.size + 1, 0)
     }
@@ -675,7 +774,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         get() {
             val g = ghost ?: return false
             val s = selected ?: return false
-            return Objekti.slobodno(g, flowRows(), objects - s)
+            return Objekti.slobodno(g, flowRows(), objects - s, screenWidths())
         }
 
     fun confirmGhost() {

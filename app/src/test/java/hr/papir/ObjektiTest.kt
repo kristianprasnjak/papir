@@ -158,4 +158,35 @@ class ObjektiTest {
         assertEquals(sirovo, Oblik.zapisi(p.tekst, p.stilovi, p.linije, p.kljuc, p.format, p.objekti, p.mreza).sirovo)
         assertEquals(sirovo, Oblik.zapisi(p.tekst, p.stilovi, kljuc = p.kljuc, objekti = p.objekti).sirovo)
     }
+
+    @Test
+    fun slikaSePomiceSRetcima() {
+        val stari = listOf("Recept", "za osam osoba", "", "200 g brašna")
+        val red = listOf(2, 1, 1, 1) // naslov su dva retka
+        val slika = Objekt.slika(2, 18, 13, 5, "torta.jpg") // uz „za osam osoba"
+        // Enter na kraju naslova: novi redak iznad slike, slika ide dolje
+        val novi = listOf("Recept", "", "za osam osoba", "", "200 g brašna")
+        assertEquals(3, Objekti.pomakni(listOf(slika), stari, novi, red, listOf(2, 1, 1, 1, 1))[0].redak)
+        // brisanje tog retka: natrag gore
+        assertEquals(2, Objekti.pomakni(listOf(slika.copy(redak = 3)), novi, stari, listOf(2, 1, 1, 1, 1), red)[0].redak)
+        // Enter u retku uz sliku: slika počinje u tom retku, ostaje
+        val razlomljeno = listOf("Recept", "za osam", "osoba", "", "200 g brašna")
+        assertEquals(2, Objekti.pomakni(listOf(slika), stari, razlomljeno, red, listOf(2, 1, 1, 1, 1))[0].redak)
+        // tipkanje ispod slike ne dira sliku
+        val ispod = listOf("Recept", "za osam osoba", "", "200 g brašna, 4 jaja")
+        assertEquals(slika, Objekti.pomakni(listOf(slika), stari, ispod, red, red)[0])
+        // redak iznad postane naslov (dva retka): slika ide redak dolje
+        val tekst = listOf("Recept", "za osam osoba")
+        assertEquals(2, Objekti.pomakni(listOf(slika.copy(redak = 1)), tekst, tekst, listOf(1, 1), listOf(2, 1))[0].redak)
+    }
+
+    @Test
+    fun slobodnoNaEkranu() {
+        val retci = listOf("Recept", "══════", "")
+        // u datoteci je mjesto slobodno, ali na ekranu je XL naslov širok 11 stupaca
+        val o = Objekt.kutija(0, 8, "a")
+        assertTrue(Objekti.slobodno(o, retci, emptyList()))
+        assertTrue(!Objekti.slobodno(o, retci, emptyList(), mapOf(0 to 11, 1 to 11)))
+        assertTrue(Objekti.slobodno(o.na(0, 12), retci, emptyList(), mapOf(0 to 11, 1 to 11)))
+    }
 }

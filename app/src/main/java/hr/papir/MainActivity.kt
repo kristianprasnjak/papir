@@ -90,7 +90,11 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
@@ -312,6 +316,8 @@ private class StilPrikaz(
     private val bojaPoveznice: Color,
     private val bojaOznake: Color,
     private val bojaTrenutne: Color,
+    /** Znakovi □ ■ ► ▼ koje aplikacija crta sama: u tekstu su nevidljivi. */
+    private val zivi: Set<Int> = emptySet(),
 ) : VisualTransformation {
 
     var mapping: OffsetMapping = OffsetMapping.Identity
@@ -336,6 +342,18 @@ private class StilPrikaz(
         }
         for (r in oznake) {
             if (r.last < n) b.addStyle(SpanStyle(background = if (r == trenutna) bojaTrenutne else bojaOznake), znak(r.first), znak(r.last) + 1)
+        }
+        for (i in zivi) if (i < n) b.addStyle(SpanStyle(color = Color.Transparent), znak(i), znak(i) + 1)
+        // naslov: jedan odlomak visok dva retka mreže
+        var od = 0
+        while (od <= n) {
+            val kraj = text.indexOf('\n', od).let { if (it < 0) n else it }
+            val v = stilovi.getOrNull(od)?.velicina ?: 0
+            if (v > 0 && kraj > od) {
+                val doKraja = if (kraj < n) znak(kraj) + 1 else (n + prije[n])
+                b.addStyle(ParagraphStyle(lineHeight = (RED * 2).sp, lineHeightStyle = sredinaRetka), od + prije[od], doKraja)
+            }
+            od = kraj + 1
         }
         val m = b.length
         val uPrikaz = IntArray(n + 1) { it + prije[it] }
@@ -764,11 +782,18 @@ private fun MessageLine(text: String, onDismiss: () -> Unit) {
     )
 }
 
+/** Visina jednog retka mreže (sp): jedan redak datoteke je jedan redak ekrana. */
+private const val RED = 26
+
+private val sredinaRetka = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)
+
 @Composable
 private fun papirStil(): TextStyle = TextStyle(
     fontFamily = FontFamily.Monospace,
     fontSize = 17.sp,
-    // bez fiksne visine retka: veći naslovi (L, XL) dobivaju svoj prostor
+    // svaki redak iste visine, kao u Notepadu; naslov zauzima svoja dva (tekst i crtu)
+    lineHeight = RED.sp,
+    lineHeightStyle = sredinaRetka,
     color = MaterialTheme.colorScheme.onSurface,
 )
 
@@ -873,6 +898,7 @@ private fun Paper(
                             ),
                     )
                 }
+                Markers(vm, polozaji, znak, density)
                 Objects(vm, polozaji, znak, density)
             }
         }
@@ -1035,8 +1061,9 @@ private fun TextSegment(
     }
     val trenutna = vm.matches.getOrNull(vm.currentMatch)?.let { (it.first - start)..(it.last - start) }
     val boje = MaterialTheme.colorScheme
-    val prikaz = remember(dijelStilova, praznine, oznake, trenutna, boje) {
-        StilPrikaz(dijelStilova, praznine, oznake, trenutna, boje.primary, boje.primary.copy(alpha = 0.18f), boje.primary.copy(alpha = 0.4f))
+    val zivi = remember(dio, vm.isKeyed) { if (vm.isKeyed) markerPositions(dio).map { it.first }.toSet() else emptySet() }
+    val prikaz = remember(dijelStilova, praznine, oznake, trenutna, boje, zivi) {
+        StilPrikaz(dijelStilova, praznine, oznake, trenutna, boje.primary, boje.primary.copy(alpha = 0.18f), boje.primary.copy(alpha = 0.4f), zivi)
     }
     var raspored by remember { mutableStateOf<TextLayoutResult?>(null) }
     var vrhOdsjecka by remember { mutableStateOf(0f) }
@@ -1053,7 +1080,6 @@ private fun TextSegment(
         }
     }
     val pocetak by rememberUpdatedState(start)
-    val trenutniPrikaz by rememberUpdatedState(prikaz)
     CompositionLocalProvider(LocalClipboardManager provides clipboard) {
         BasicTextField(
             value = TextFieldValue(dio, lokalno, comp),
@@ -1086,19 +1112,6 @@ private fun TextSegment(
                         }
                     }
                 }
-                // Dodir na □ ■ ► ▼ mijenja znak (STANDARD.md, 5.1 i 5.2); tekstno polje dobije dodir normalno.
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        val dolje = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        val gore = waitForUpOrCancellation(pass = PointerEventPass.Initial)
-                        if (gore != null && (gore.position - dolje.position).getDistance() < viewConfiguration.touchSlop) {
-                            raspored?.let { l ->
-                                val t = l.getOffsetForPosition(dolje.position)
-                                vm.toggleAt(pocetak + trenutniPrikaz.mapping.transformedToOriginal(t))
-                            }
-                        }
-                    }
-                }
                 .let { if (requester != null) it.focusRequester(requester) else it }
                 .onFocusChanged { if (it.isFocused) onFocused() },
         )
@@ -1125,6 +1138,93 @@ private class PapirClipboard(
     }
 }
 
+/** Gdje su u tekstu živi znakovi: (pozicija znaka, redak u tekstu). */
+private fun markerPositions(tekst: String): List<Pair<Int, Int>> {
+    val out = ArrayList<Pair<Int, Int>>()
+    var od = 0
+    var redak = 0
+    while (od <= tekst.length) {
+        val kraj = tekst.indexOf('\n', od).let { if (it < 0) tekst.length else it }
+        val l = tekst.substring(od, kraj)
+        if (Mape.jeKvacica(l) || Mape.zaglavlje(l) != null) out.add(od + Mape.uvlaka(l) to redak)
+        od = kraj + 1
+        redak++
+    }
+    return out
+}
+
+/**
+ * Kvačice i strelice mapa: element sučelja, ne slovo (PAPIR.md, 6). Dodirna površina je od
+ * prsta; dodir mijenja jedan znak u datoteci.
+ */
+@Composable
+private fun Markers(vm: PapirViewModel, polozaji: Polozaji, znak: Float, density: androidx.compose.ui.unit.Density) {
+    if (!vm.isKeyed || vm.readOnly) return
+    val tekst = vm.content.text
+    val boja = MaterialTheme.colorScheme.primary
+    val podloga = MaterialTheme.colorScheme.background
+    val vidljivi = markerPositions(tekst).mapNotNull { (pozicija, linija) -> polozaji[linija]?.let { Triple(pozicija, it.first, it.second) } }
+    for ((pozicija, vrh, dno) in vidljivi) {
+        val c = tekst[pozicija]
+        val stupac = pozicija - (tekst.lastIndexOf('\n', pozicija - 1) + 1)
+        val visina = minOf(dno - vrh, with(density) { (RED * 2).sp.toPx() }).let { if (it <= 0f) 1f else it }
+        val vrhRetka = vrh + ((dno - vrh) - visina) / 2
+        val dodir = with(density) { 44.dp.toPx() }
+        val x = stupac * znak + znak / 2 - dodir / 2
+        val y = vrhRetka + visina / 2 - dodir / 2
+        Box(
+            Modifier
+                .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
+                .size(44.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                ) { vm.toggleAt(pozicija) }
+                .semantics {
+                    contentDescription = when (c) {
+                        Mape.PRAZNO -> "Označi"
+                        Mape.OZNACENO -> "Odznači"
+                        Mape.ZATVORENO -> "Otvori mapu"
+                        else -> "Zatvori mapu"
+                    }
+                }
+                .drawBehind {
+                    val a = minOf(znak * 1.1f, size.width * 0.42f)
+                    val cx = size.width / 2
+                    val cy = size.height / 2
+                    val l = cx - a / 2
+                    val t = cy - a / 2
+                    when (c) {
+                        Mape.PRAZNO, Mape.OZNACENO -> {
+                            val w = 2.dp.toPx()
+                            drawRoundRect(boja, Offset(l, t), androidx.compose.ui.geometry.Size(a, a), androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()), style = Stroke(w))
+                            if (c == Mape.OZNACENO) {
+                                drawRoundRect(boja, Offset(l, t), androidx.compose.ui.geometry.Size(a, a), androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
+                                val kvaka = Path().apply {
+                                    moveTo(l + a * 0.22f, t + a * 0.52f)
+                                    lineTo(l + a * 0.43f, t + a * 0.72f)
+                                    lineTo(l + a * 0.78f, t + a * 0.3f)
+                                }
+                                drawPath(kvaka, podloga, style = Stroke(w))
+                            }
+                        }
+                        else -> {
+                            val trokut = Path().apply {
+                                if (c == Mape.OTVORENO) {
+                                    moveTo(l, t + a * 0.2f); lineTo(l + a, t + a * 0.2f); lineTo(cx, t + a * 0.85f)
+                                } else {
+                                    moveTo(l + a * 0.2f, t); lineTo(l + a * 0.85f, cy); lineTo(l + a * 0.2f, t + a)
+                                }
+                                close()
+                            }
+                            drawPath(trokut, boja)
+                        }
+                    }
+                },
+        )
+    }
+}
+
 /**
  * Tablica kako je aplikacija crta: prave linije i ćelije. Širine stupaca su iste kao u
  * datoteci (znakova u fontu jednake širine), pa izgleda isto kao u Notepadu.
@@ -1143,48 +1243,68 @@ private fun TableView(
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val znak = remember(stil) { with(density) { measurer.measure("0", stil).size.width.toDp() } }
-    // Stupac na ekranu je točno širok kao u datoteci: koliko znakova i razmaka, najmanje jedan.
+    val red = with(density) { RED.sp.toDp() }
+    // Na mreži Notepada: svaki zid je jedan stupac, svaka crta jedan redak; ćelija je razmak, tekst, razmak.
     val sirine = t.sirine.map { znak * (maxOf(it, 1) + 2) }
-    val ukupno = sirine.fold(0.dp) { a, b -> a + b }
+    val ukupno = sirine.fold(znak) { a, b -> a + b + znak }
+    val visine = t.retci.map { row -> row.maxOf { it.trimEnd('\n').split("\n").size }.coerceAtLeast(1) }
     val linija = MaterialTheme.colorScheme.outline
-    Box(modifier.padding(vertical = 6.dp)) {
-        Column(Modifier.border(1.dp, linija)) {
-            t.retci.forEachIndexed { r, row ->
-                if (r > 0) {
-                    Box(
-                        Modifier
-                            .width(ukupno)
-                            .height(if (r == 1 && t.zaglavlje) 3.dp else 1.dp)
-                            .background(linija),
-                    )
-                }
-                Row(
-                    Modifier.drawBehind {
-                        var x = 0f
-                        sirine.dropLast(1).forEach { w ->
-                            x += w.toPx()
-                            drawLine(linija, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
-                        }
-                    },
-                ) {
-                    row.forEachIndexed { c, celija ->
-                        val kljuc = Triple(index, r, c)
-                        CellEditor(
-                            text = celija,
-                            key = kljuc,
-                            width = sirine[c],
-                            padding = znak,
-                            bold = t.zaglavlje && r == 0,
-                            enabled = enabled,
-                            style = stil,
-                            onChange = { prije, novo -> onCell(r, c, prije, novo) },
-                            onFocus = { fokus ->
-                                if (fokus) onFocusCell(kljuc) else if (focusedCell == kljuc) onFocusCell(null)
-                            },
-                        )
-                    }
+    Column(
+        modifier.drawBehind {
+            val r = red.toPx()
+            val z = znak.toPx()
+            val debljina = 1.dp.toPx()
+            val vrh = r / 2
+            val crte = ArrayList<Float>()
+            var y = r
+            for (v in visine) {
+                y += v * r
+                crte.add(y + r / 2)
+                y += r
+            }
+            val dno = crte.last()
+            val sirina = ukupno.toPx()
+            drawLine(linija, Offset(z / 2, vrh), Offset(sirina - z / 2, vrh), strokeWidth = debljina)
+            crte.forEachIndexed { k, cy ->
+                if (k == 0 && t.zaglavlje && crte.size > 1) {
+                    // ╞═╪╡: dvostruka crta ispod zaglavlja
+                    drawLine(linija, Offset(z / 2, cy - 2.dp.toPx()), Offset(sirina - z / 2, cy - 2.dp.toPx()), strokeWidth = debljina)
+                    drawLine(linija, Offset(z / 2, cy + 2.dp.toPx()), Offset(sirina - z / 2, cy + 2.dp.toPx()), strokeWidth = debljina)
+                } else {
+                    drawLine(linija, Offset(z / 2, cy), Offset(sirina - z / 2, cy), strokeWidth = debljina)
                 }
             }
+            var x = z / 2
+            drawLine(linija, Offset(x, vrh), Offset(x, dno), strokeWidth = debljina)
+            for (w in sirine) {
+                x += w.toPx() + z
+                drawLine(linija, Offset(x, vrh), Offset(x, dno), strokeWidth = debljina)
+            }
+        },
+    ) {
+        Spacer(Modifier.width(ukupno).height(red))
+        t.retci.forEachIndexed { r, row ->
+            Row(Modifier.height(red * visine[r])) {
+                Spacer(Modifier.width(znak))
+                row.forEachIndexed { c, celija ->
+                    val kljuc = Triple(index, r, c)
+                    CellEditor(
+                        text = celija,
+                        key = kljuc,
+                        width = sirine[c],
+                        padding = znak,
+                        bold = t.zaglavlje && r == 0,
+                        enabled = enabled,
+                        style = stil,
+                        onChange = { prije, novo -> onCell(r, c, prije, novo) },
+                        onFocus = { fokus ->
+                            if (fokus) onFocusCell(kljuc) else if (focusedCell == kljuc) onFocusCell(null)
+                        },
+                    )
+                    Spacer(Modifier.width(znak))
+                }
+            }
+            Spacer(Modifier.height(red))
         }
     }
 }
@@ -1227,7 +1347,7 @@ private fun CellEditor(
         ),
         modifier = Modifier
             .width(width)
-            .padding(horizontal = padding, vertical = 4.dp)
+            .padding(horizontal = padding)
             .onFocusChanged { onFocus(it.isFocused) },
     )
 }
