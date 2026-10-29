@@ -131,6 +131,6 @@ Samo papir, bez funkcija:
 
 ## Instalacija na mobitel
 
-Svaki push na `main` gradi APK u GitHub Actions i objavljuje ga pod [Releases](../../releases). Na Androidu otvori najnovije izdanje, preuzmi `papir.apk` i instaliraj (treba dopustiti instalaciju iz preglednika).
+Svaki push na `main` gradi APK u GitHub Actions i objavljuje ga pod [Releases](../../releases). Na Androidu otvori najnovije izdanje, preuzmi `papirX.Y.Z.apk` (npr. `papir0.9.1.apk`) i instaliraj (treba dopustiti instalaciju iz preglednika).
 
 Napomena: izdanja 0.x potpisana su javnim razvojnim ključem (`app/debug.keystore`), samo radi lakšeg ažuriranja. Pravi ključ dolazi prije objave na Google Playu.

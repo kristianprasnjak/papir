@@ -53,13 +53,14 @@ jobs:
 
       - name: Priprema
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk papir.apk
-          echo "VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)" >> "$GITHUB_ENV"
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          cp app/build/outputs/apk/debug/app-debug.apk "papir$VERSION.apk"
 
       - uses: actions/upload-artifact@v4
         with:
           name: papir-apk
-          path: papir.apk
+          path: papir${{ env.VERSION }}.apk
 
       - name: Izdanje za mobitel
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -68,7 +69,7 @@ jobs:
           tag_name: v${{ env.VERSION }}-build${{ github.run_number }}
           name: Papir ${{ env.VERSION }} (build ${{ github.run_number }})
           prerelease: true
-          files: papir.apk
+          files: papir${{ env.VERSION }}.apk
           body: |
-            Instalacija: preuzmi `papir.apk` na Android mobitelu i otvori ga.
+            Instalacija: preuzmi `papir${{ env.VERSION }}.apk` na Android mobitelu i otvori ga.
             Commit: ${{ github.sha }}
