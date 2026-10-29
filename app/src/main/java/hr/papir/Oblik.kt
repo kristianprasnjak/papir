@@ -15,6 +15,13 @@ data class Stil(
 
     companion object {
         val OBICNO = Stil()
+
+        /** Koliko je puta slovo veće od običnog na ekranu; isto i za širinu (font jednake širine). */
+        fun mjera(velicina: Int): Float = when (velicina) {
+            2 -> 1.7f
+            1 -> 1.3f
+            else -> 1f
+        }
     }
 }
 
