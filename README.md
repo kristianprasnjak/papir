@@ -6,6 +6,11 @@ Zašto i kako: [MANIFEST.md](MANIFEST.md), pet točaka.
 
 Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zauvijek otvara u bilo kojem programu za tekst, uključujući stari Windows Notepad. Format je otvoren i opisan u [STANDARD.md](STANDARD.md); aplikacija u [PAPIR.md](PAPIR.md).
 
+## Verzija 0.9.4
+
+- izbornik Zalijepi / Odaberi sve više ne prati svaki dodir: pokazuje se kad je tekst odabran ili nakon dugog pritiska
+- verzija koju je Papir sam upravo zapisao, a sustav ili oblak je još kratko vraća, više ne izaziva lažni sukob
+
 ## Verzija 0.9.3
 
 - L i XL naslov na ekranu zauzimaju jedan redak svoje veličine (u datoteci i dalje imaju crtu ispod)

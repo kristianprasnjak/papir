@@ -87,6 +87,10 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalTextToolbar
+import androidx.compose.ui.platform.TextToolbar
+import androidx.compose.ui.geometry.Rect
+import android.os.SystemClock
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -840,7 +844,25 @@ private fun Paper(
         hScroll.animateScrollTo(((stupac - 4) * znak).roundToInt().coerceAtLeast(0))
     }
 
-    BoxWithConstraints(modifier.fillMaxWidth()) {
+    // Izbornik Zalijepi / Odaberi sve samo kad je tekst odabran ili nakon dugog pritiska, a ne na svaki dodir.
+    val dugiPritisak = remember { longArrayOf(0L) }
+    val osnovniIzbornik = LocalTextToolbar.current
+    val izbornik = remember(osnovniIzbornik) { PapirToolbar(osnovniIzbornik) { dugiPritisak[0] } }
+
+    CompositionLocalProvider(LocalTextToolbar provides izbornik) {
+    BoxWithConstraints(
+        modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val ishod: Any? = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                        waitForUpOrCancellation(pass = PointerEventPass.Initial) ?: "otkazano"
+                    }
+                    if (ishod == null) dugiPritisak[0] = SystemClock.uptimeMillis()
+                }
+            },
+    ) {
         val sirinaEkrana = maxWidth
         val sirinaPx = with(density) { maxWidth.toPx() }
         val visinaPx = with(density) { maxHeight.toPx() }
@@ -917,6 +939,25 @@ private fun Paper(
                 Markers(vm, polozaji, znak, density)
                 Objects(vm, polozaji, znak, density)
             }
+        }
+    }
+    }
+}
+
+/** Izbornik teksta koji se pokazuje kad je tekst odabran ili nakon dugog pritiska. */
+private class PapirToolbar(private val base: TextToolbar, private val dugiPritisak: () -> Long) : TextToolbar by base {
+    override fun showMenu(
+        rect: Rect,
+        onCopyRequested: (() -> Unit)?,
+        onPasteRequested: (() -> Unit)?,
+        onCutRequested: (() -> Unit)?,
+        onSelectAllRequested: (() -> Unit)?,
+    ) {
+        val odabrano = onCopyRequested != null || onCutRequested != null
+        if (odabrano || SystemClock.uptimeMillis() - dugiPritisak() < 1500) {
+            base.showMenu(rect, onCopyRequested, onPasteRequested, onCutRequested, onSelectAllRequested)
+        } else {
+            base.hide()
         }
     }
 }
