@@ -40,7 +40,7 @@ Ustav je iznad svakog zahtjeva za funkcijom. Ako se funkcija ne može napraviti 
 ## 3. Papiri i mapa
 
 - **Mapa za papire** bira se jednom, pri prvom pokretanju. Svi papiri su obične datoteke u njoj.
-- **Dodir ikone uvijek otvara prazan papir**, s kursorom i tipkovnicom (manifest, 5). Datoteka otvorena iz druge aplikacije otvara tu datoteku. Povratak u Papir preko popisa nedavnih aplikacija ostavlja papir na kojem si bio, i kad ga je sustav u međuvremenu ugasio.
+- **Svako pokretanje otvara prazan papir**, s kursorom i tipkovnicom (manifest, 5). Datoteka otvorena iz druge aplikacije otvara tu datoteku. Povratak u Papir dok je još otvoren ostavlja papir na kojem si bio. Prijašnji papiri su u popisu papira, jedan dodir daleko.
 - **Novi papir** postaje datoteka `Note.pap` čim dobije prvo slovo. Ako ime postoji, Android sam dodaje broj: `Note (1).pap`, `Note (2).pap`…
 - **Nastavak `.pap` je preporuka, ne obveza.** Ime se može promijeniti u bilo kojem trenutku (**Preimenuj…**, **Spremi kao…**) u bilo što, uključujući `.txt`, `.html` ili `.random`; papir ostaje papir zbog ključa, a ne zbog nastavka.
 - **Otvori…** otvara bilo koju tekstnu datoteku. Datoteka bez ključa je goli tekst i ostaje goli tekst dok korisnik izričito ne doda funkciju.

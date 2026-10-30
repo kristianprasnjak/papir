@@ -216,8 +216,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     init {
         folder = prefs.getString(KEY_FOLDER, null)?.let(Uri::parse)?.takeIf(::hasPersistedWrite)
         hasFolder = folder != null
-        // Dodir ikone: uvijek prazan papir (MANIFEST.md, 5). Zadnji papir vraća se samo kad je
-        // sustav sam ugasio aplikaciju u pozadini (onRecreated).
+        // Svako pokretanje: prazan papir (MANIFEST.md, 5). Prijašnji papiri su u popisu papira.
         op {
             startEmpty(remember = false)
             moveLegacyDraft()
@@ -1148,23 +1147,6 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         if (remember) prefs.edit().remove(KEY_TARGET).apply()
     }
 
-    private var activityChecked = false
-
-    /**
-     * Zove ekran kad nastane. Ako ga je sustav ponovno stvorio nakon što je ugasio aplikaciju u
-     * pozadini, vraća se papir na kojem je čovjek bio; inače ostaje prazan papir.
-     */
-    fun onActivityCreated(recreated: Boolean) {
-        if (activityChecked) return
-        activityChecked = true
-        if (!recreated) return
-        op {
-            if (target != null || content.text.isNotEmpty()) return@op
-            val last = prefs.getString(KEY_TARGET, null)?.let(Uri::parse) ?: return@op
-            load(last)
-        }
-    }
-
     // --- Popis papira (PAPIR.md, 9) ---
 
     /** Jedna datoteka u mapi za papire. */
@@ -1258,6 +1240,10 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun moveLegacyDraft() {
         val dir = folder ?: return
+        if (prefs.getBoolean(KEY_LEGACY_MOVED, false)) {
+            io { legacyDraft.delete() }
+            return
+        }
         val old = io {
             try {
                 if (legacyDraft.baseFile.exists()) PapirFile.decode(legacyDraft.readFully())?.text.orEmpty() else ""
@@ -1277,6 +1263,8 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
                 null
             }
         } ?: return // nacrt ostaje gdje je; pokušat će se ponovno
+        // nacrt se seli samo jednom, i kad ga sustav ne da obrisati
+        prefs.edit().putBoolean(KEY_LEGACY_MOVED, true).apply()
         io { legacyDraft.delete() }
         if (target == null && text.isEmpty()) {
             // Ono što smo upravo zapisali je ono što je na disku; ne čita se natrag, da sustav koji
@@ -1548,6 +1536,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         const val KEY_TARGET = "target"
         const val KEY_FOLDER = "folder"
+        const val KEY_LEGACY_MOVED = "legacyMoved"
         val TEXT_EXTENSIONS = setOf("pap", "txt", "md", "html", "htm", "csv", "json", "xml", "log", "ini", "cfg")
     }
 }
