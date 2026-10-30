@@ -344,14 +344,15 @@ private class StilPrikaz(
             if (r.last < n) b.addStyle(SpanStyle(background = if (r == trenutna) bojaTrenutne else bojaOznake), znak(r.first), znak(r.last) + 1)
         }
         for (i in zivi) if (i < n) b.addStyle(SpanStyle(color = Color.Transparent), znak(i), znak(i) + 1)
-        // naslov: jedan odlomak visok dva retka mreže
+        // naslov: jedan odlomak, visok koliko su mu velika slova
         var od = 0
         while (od <= n) {
             val kraj = text.indexOf('\n', od).let { if (it < 0) n else it }
             val v = stilovi.getOrNull(od)?.velicina ?: 0
             if (v > 0 && kraj > od) {
                 val doKraja = if (kraj < n) znak(kraj) + 1 else (n + prije[n])
-                b.addStyle(ParagraphStyle(lineHeight = (RED * 2).sp, lineHeightStyle = sredinaRetka), od + prije[od], doKraja)
+                // naslov je na ekranu jedan redak svoje veličine; crta ispod njega postoji samo u datoteci
+                b.addStyle(ParagraphStyle(lineHeight = (RED * Stil.mjera(v)).sp, lineHeightStyle = sredinaRetka), od + prije[od], doKraja)
             }
             od = kraj + 1
         }
@@ -791,7 +792,7 @@ private val sredinaRetka = LineHeightStyle(LineHeightStyle.Alignment.Center, Lin
 private fun papirStil(): TextStyle = TextStyle(
     fontFamily = FontFamily.Monospace,
     fontSize = 17.sp,
-    // svaki redak iste visine, kao u Notepadu; naslov zauzima svoja dva (tekst i crtu)
+    // obični retci iste visine, kao u Notepadu; naslov je jedan redak svoje veličine
     lineHeight = RED.sp,
     lineHeightStyle = sredinaRetka,
     color = MaterialTheme.colorScheme.onSurface,
