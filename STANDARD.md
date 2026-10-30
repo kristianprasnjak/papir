@@ -173,7 +173,7 @@ Vrste: **unos** upiše običan tekst i zaboravi ga; **živa** je oznaka koja se 
 
 ### 5.1 Kvačica
 
-- Redak je kvačica ako počinje (iza uvlake od razmaka) znakom `□` (U+25A1, neoznačeno) ili `■` (U+25A0, Alt+254, označeno) i razmakom.
+- Redak je kvačica ako počinje (iza uvlake od razmaka) znakom `□` (U+25A1, neoznačeno) ili `■` (U+25A0, Alt+254, označeno), iza kojeg je razmak ili kraj retka.
 - Označavanje mijenja taj jedan znak u datoteci. Stanje je uvijek zapisano i vidi se i u Notepadu.
 
 ```
@@ -184,7 +184,7 @@ Vrste: **unos** upiše običan tekst i zaboravi ga; **živa** je oznaka koja se 
 
 ### 5.2 Mapa (skrivanje)
 
-- Zaglavlje mape je redak koji (iza uvlake) počinje znakom `►` (U+25BA, Alt+16, zatvorena) ili `▼` (U+25BC, Alt+31, otvorena) i razmakom. Ostatak retka je ime mape.
+- Zaglavlje mape je redak koji (iza uvlake) počinje znakom `►` (U+25BA, Alt+16, zatvorena) ili `▼` (U+25BC, Alt+31, otvorena), iza kojeg je razmak ili kraj retka. Ostatak retka je ime mape.
 - **Sadržaj mape** su svi retci ispod zaglavlja uvučeni više od zaglavlja, zajedno s praznim retcima između njih. Prvi neprazan redak uvučen jednako ili manje završava mapu. Prazni retci na kraju ne pripadaju mapi.
 - Podmapa je zaglavlje unutar sadržaja. Uvlaka je od razmaka; predlaže se dva razmaka po razini, kao stablo u Exploreru.
 - Otvaranje i zatvaranje mijenja taj jedan znak u datoteci: mapa ostaje upisana prema zadnjem stanju. Program sadržaj zatvorene mape ne prikazuje, ali ga nikad ne briše; u Notepadu je uvijek vidljiv.

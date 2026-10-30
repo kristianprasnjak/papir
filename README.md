@@ -6,6 +6,13 @@ Zašto i kako: [MANIFEST.md](MANIFEST.md), pet točaka.
 
 Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zauvijek otvara u bilo kojem programu za tekst, uključujući stari Windows Notepad. Format je otvoren i opisan u [STANDARD.md](STANDARD.md); aplikacija u [PAPIR.md](PAPIR.md).
 
+## Verzija 0.9.2: popravci nakon prve probe
+
+- kvačica i mapa odmah se crtaju kao kvadratić i strelica i rade na dodir (prije su se pojavljivale tek nakon Entera i nisu reagirale)
+- mijenjanje veličine slike: obris pokazuje sliku i mjere, i ostaje na ekranu dok se širi; kaže i kad je slika najuža za svoje ime
+- kvačica ili mapa bez ičega iza znaka i dalje su kvačica ili mapa
+- preseljenje starog nacrta više ne izaziva lažni sukob verzija
+
 ## Verzija 0.9.1: slika i tekst se ne sudaraju
 
 - jedan redak datoteke je jedan redak ekrana: naslovi i tablice stoje na istoj mreži kao u Notepadu, pa slike stoje točno gdje i u datoteci

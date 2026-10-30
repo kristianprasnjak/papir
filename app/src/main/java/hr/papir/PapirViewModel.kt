@@ -77,9 +77,9 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     /** Ima li papir ključ: tek tada se tablice prepoznaju i u tekstu koji se piše. */
-    private var keyed = false
+    private var keyed by mutableStateOf(false)
 
-    /** Žive funkcije (kvačice, mape) rade samo u papiru s ključem. */
+    /** Žive funkcije (kvačice, mape) rade samo u papiru s ključem. Stanje: ekran ga prati. */
     val isKeyed: Boolean get() = keyed
 
     /** Broj formata iz ključa (0 bez ključa); noviji od poznatog se čuva (STANDARD.md, 8). */
@@ -1158,7 +1158,15 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         } ?: return // nacrt ostaje gdje je; pokušat će se ponovno
         io { legacyDraft.delete() }
         if (target == null && text.isEmpty()) {
-            if (load(created)) message = "Tvoj nacrt sada je datoteka „$title“ u mapi za papire."
+            // Ono što smo upravo zapisali je ono što je na disku; ne čita se natrag, da sustav koji
+            // datoteku još dovršava ne izazove lažni sukob.
+            resetTo(TextFieldValue(""))
+            applyBytes(bytes, keepCursor = false)
+            target = created
+            title = io { displayName(created) }
+            canRename = io { supportsRename(created) }
+            prefs.edit().putString(KEY_TARGET, created.toString()).apply()
+            message = "Tvoj nacrt sada je datoteka „$title“ u mapi za papire."
         } else {
             message = "Tvoj stari nacrt spremljen je kao „${io { displayName(created) }}“ u mapi za papire."
         }
