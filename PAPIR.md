@@ -27,7 +27,7 @@ Ustav je iznad svakog zahtjeva za funkcijom. Ako se funkcija ne može napraviti 
 
 - **Svaka kontrola mijenja ili datoteku ili samo prikaz, i to se mora znati.** B, I, veličina, tablica, kvačica, mapa, poveznica, slika, kutija i datum mijenjaju datoteku. Pomicanje papira i traženje ne mijenjaju ništa.
 - **Papir se ne prelama**, kao u Notepadu: dugačak redak ide udesno, a papir se pomiče i vodoravno.
-- **Jedan redak datoteke je jedan redak ekrana**, svi iste visine. Naslov zauzima svoja dva (tekst i crtu), a tablica svoje (i crte su retci, i zidovi stupci). Zato slike i kutije stoje na ekranu u istom retku kao u Notepadu.
+- **Obični retci su na ekranu svi iste visine**, kao u Notepadu. Naslov je na ekranu jedan redak svoje veličine (L oko 1,3, XL oko 1,7 običnog), iako u datoteci ima i crtu ispod sebe. Tablica stoji na mreži Notepada (i crte su retci, i zidovi stupci). Slike i kutije ravnaju se po retku teksta uz koji stoje; uz sam naslov njihov položaj po visini je približan.
 - **Napredno uređivanje je u Papiru.** Notepad otvara i piše. Ako u Notepadu netko pokvari okvir ili oznaku, Papir pokaže tekst, točno kako izgleda u Notepadu.
 - **Nema skrivenih načina rada.** Što je na ekranu, to je stanje; nema „uključenog" načina koji mijenja što tipke rade bez da se vidi.
 - **Ništa slučajno.** Nijedna gesta, dvostruki dodir ni duži pritisak ne umeće funkciju. Funkcija je uvijek dva namjerna dodira: **+**, pa funkcija.
