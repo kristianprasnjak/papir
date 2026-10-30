@@ -60,6 +60,8 @@ Spremanje (s provjerom promjene izvana), sukobi i poništavanje rade nad txt-om,
 | 0.9 | Manifest; bez S i XS; traži i zamijeni; kvačica; mape; poveznica; slike u paketu `.pzp`; kutije teksta; papir bez prelamanja |
 | 0.9.1 | Jedan redak datoteke = jedan redak ekrana (i naslovi i tablice); kvačice i mape kao element sučelja; slike se pomiču s retcima; provjera slobodnog mjesta po ekranu; XL uz sliku se odbija |
 | 0.9.3 | Naslov je na ekranu jedan redak svoje veličine |
+| 0.9.4 | Izbornik teksta samo uz odabir ili dugi pritisak; vlastite nedavne verzije nisu sukob |
+| 0.10 | Prazan papir na dodir ikone; popis papira; novi izgled: tinta, ugrađen font, vlastite ikone, tiše obavijesti |
 | kasnije | „Popravi tablicu", datum u ćeliji, oblikovanje u ćeliji, lijepljenje s oblikovanjem, traženje u tablicama |
 
 Dogovoreno za tablice (STANDARD.md, 4): zidovi od tankih linija `┌ ┬ ┐ │ ├ ┼ ┤ └ ┴ ┘ ─`, dvostruka crta `╞ ═ ╪ ╡` ispod zaglavlja, crta između svaka dva retka tablice. Ćelija je pisaći stroj: Enter je jedini prijelom; riječi i razmaci šire stupac, a stupac je uvijek točno širok koliko najdulji red. Povlačenje zidova i oznaka prijeloma `↓` su odbačeni (vlasnik, 0.8): sve je u slovima i razmacima.

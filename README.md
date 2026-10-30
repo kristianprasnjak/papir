@@ -6,6 +6,12 @@ Zašto i kako: [MANIFEST.md](MANIFEST.md), pet točaka.
 
 Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zauvijek otvara u bilo kojem programu za tekst, uključujući stari Windows Notepad. Format je otvoren i opisan u [STANDARD.md](STANDARD.md); aplikacija u [PAPIR.md](PAPIR.md).
 
+## Verzija 0.10: prazan papir, popis papira, novi izgled
+
+- **dodir ikone uvijek otvara prazan papir**; zadnji papir vraća se samo ako ga je sustav ugasio dok si bio u drugoj aplikaciji
+- **popis papira** (ikona gore lijevo): papiri iz mape, najnoviji gore, s prvim retkom i vremenom; traženje po imenu i tekstu
+- **novi izgled**: jedna boja tinte umjesto ljubičaste, ugrađen font JetBrains Mono NL, vlastite tanke ikone, funkcije kao traka ikona, sive obavijesti koje same nestanu, iste tanke crte svugdje, nova ikona aplikacije
+
 ## Verzija 0.9.4
 
 - izbornik Zalijepi / Odaberi sve više ne prati svaki dodir: pokazuje se kad je tekst odabran ili nakon dugog pritiska
