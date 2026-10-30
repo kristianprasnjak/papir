@@ -98,6 +98,17 @@ import androidx.compose.ui.text.ParagraphStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
+import androidx.compose.ui.text.font.Font
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
@@ -128,6 +139,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        vm.onActivityCreated(recreated = savedInstanceState != null)
         if (savedInstanceState == null) handleIntent(intent)
         setContent { PapirTheme { PapirScreen(vm) } }
     }
@@ -158,12 +170,60 @@ class MainActivity : ComponentActivity() {
 /** Radnje s tablicom iz popisa funkcija, dok je kursor u ćeliji. */
 private enum class TableAction { RowBelow, ColumnRight, DeleteRow, DeleteColumn, DeleteTable }
 
+/** Tanka crta: jedina razdjelnica u Papiru. */
+@Composable
+private fun Crta() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
+}
+
+/** Alat u traci: ikona i kratki natpis ispod, dodirna površina od prsta. */
+@Composable
+private fun Alat(ikona: ImageVector, natpis: String, enabled: Boolean = true, aktivan: Boolean = false, onClick: () -> Unit) {
+    val boja = when {
+        !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+        aktivan -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    Column(
+        Modifier
+            .widthIn(min = 64.dp)
+            .heightIn(min = 56.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(ikona, contentDescription = null, tint = boja, modifier = Modifier.size(22.dp))
+        Text(natpis, fontSize = 11.sp, color = boja, maxLines = 1, modifier = Modifier.padding(top = 3.dp))
+    }
+}
+
+/** Tekstna radnja: tiha, ili naglašena tintom. */
+@Composable
+private fun Radnja(tekst: String, enabled: Boolean = true, naglaseno: Boolean = false, onClick: () -> Unit) {
+    val boja = when {
+        !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+        naglaseno -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Text(
+        tekst,
+        fontSize = 15.sp,
+        fontWeight = if (naglaseno) FontWeight.SemiBold else FontWeight.Normal,
+        color = boja,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+    )
+}
+
 /**
  * Traka iznad tipkovnice, na dohvat palca: lijevo poništi i ponovi, desno funkcije.
  * Jedan dodir otvara popis funkcija, drugi umeće funkciju (PAPIR.md, ustav 4).
  * Iznad nje, kad treba: radnje s izabranom slikom ili kutijom, ili s poveznicom pod kursorom.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BottomBar(
     vm: PapirViewModel,
@@ -181,104 +241,119 @@ private fun BottomBar(
     val enabled = !vm.readOnly
     val izabrani = vm.selected
     val ghost = vm.ghost
-    Column(Modifier.fillMaxWidth()) {
+    val traka = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp)
+    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)) {
+        val nesto = (izabrani != null && enabled) || (open && enabled) || (enabled && vm.linkAtCursor != null)
+        if (nesto) Crta()
         when {
             izabrani != null && ghost != null && enabled -> {
                 // Pomicanje ili veličina: strelice, pa potvrda. Ništa se ne mijenja dok se ne potvrdi.
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    BarButton("←", "Lijevo", true) { vm.nudge(-1, 0) }
-                    BarButton("↑", "Gore", true) { vm.nudge(0, -1) }
-                    BarButton("↓", "Dolje", true) { vm.nudge(0, 1) }
-                    BarButton("→", "Desno", true) { vm.nudge(1, 0) }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IkonaGumb(Ikone.lijevo, "Lijevo") { vm.nudge(-1, 0) }
+                    IkonaGumb(Ikone.gore, "Gore") { vm.nudge(0, -1) }
+                    IkonaGumb(Ikone.dolje, "Dolje") { vm.nudge(0, 1) }
+                    IkonaGumb(Ikone.desno, "Desno") { vm.nudge(1, 0) }
                     Spacer(Modifier.weight(1f))
-                    TextButton(onClick = vm::cancelGhost) { Text("Odustani") }
-                    TextButton(onClick = vm::confirmGhost, enabled = vm.ghostFree) { Text("Potvrdi") }
+                    Radnja("Odustani", onClick = vm::cancelGhost)
+                    Radnja("Potvrdi", enabled = vm.ghostFree, naglaseno = true, onClick = vm::confirmGhost)
                 }
             }
             izabrani != null && enabled -> {
-                FlowRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = { vm.startGhost(PapirViewModel.GhostMode.MOVE) }) { Text("Pomakni") }
+                Row(traka) {
+                    Alat(Ikone.pomakni, "Pomakni") { vm.startGhost(PapirViewModel.GhostMode.MOVE) }
                     if (izabrani.vrsta == Objekt.Vrsta.SLIKA) {
-                        TextButton(onClick = { vm.startGhost(PapirViewModel.GhostMode.SIZE) }) { Text("Veličina") }
-                        TextButton(onClick = onRenameImage) { Text("Preimenuj") }
+                        Alat(Ikone.velicina, "Veličina") { vm.startGhost(PapirViewModel.GhostMode.SIZE) }
+                        Alat(Ikone.preimenuj, "Ime") { onRenameImage() }
                     }
-                    TextButton(onClick = vm::deleteSelected) { Text("Obriši") }
-                    TextButton(onClick = { vm.select(null) }) { Text("Gotovo") }
+                    Alat(Ikone.obrisi, "Obriši") { vm.deleteSelected() }
+                    Alat(Ikone.gotovo, "Gotovo") { vm.select(null) }
                 }
             }
             open && enabled && !textFunctions -> {
                 val (retci, stupci) = tableShape ?: (0 to 0)
-                FlowRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = { onTableAction(TableAction.RowBelow) }, enabled = tableShape != null) { Text("Redak ispod") }
-                    TextButton(onClick = { onTableAction(TableAction.ColumnRight) }, enabled = tableShape != null) { Text("Stupac desno") }
-                    TextButton(onClick = { onTableAction(TableAction.DeleteRow) }, enabled = retci > 1) { Text("Obriši redak") }
-                    TextButton(onClick = { onTableAction(TableAction.DeleteColumn) }, enabled = stupci > 1) { Text("Obriši stupac") }
-                    TextButton(onClick = { onTableAction(TableAction.DeleteTable) }, enabled = tableShape != null) { Text("Obriši tablicu") }
+                Row(traka, verticalAlignment = Alignment.CenterVertically) {
+                    Radnja("Redak ispod", tableShape != null) { onTableAction(TableAction.RowBelow) }
+                    Radnja("Stupac desno", tableShape != null) { onTableAction(TableAction.ColumnRight) }
+                    Radnja("Obriši redak", retci > 1) { onTableAction(TableAction.DeleteRow) }
+                    Radnja("Obriši stupac", stupci > 1) { onTableAction(TableAction.DeleteColumn) }
+                    Radnja("Obriši tablicu", tableShape != null) { onTableAction(TableAction.DeleteTable) }
                 }
             }
             open && enabled -> {
                 val current = vm.currentStyle
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.End,
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     FormatButton("B", "Podebljano", current.podebljano, vm::toggleBold, bold = true)
                     FormatButton("I", "Kurziv", current.kurziv, vm::toggleItalic, italic = true)
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(12.dp))
                     listOf(0 to "M", 1 to "L", 2 to "XL").forEach { (v, label) ->
                         FormatButton(label, "Veličina $label", current.velicina == v, { vm.setSize(v) })
                     }
                 }
-                FlowRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = { onClose(); vm.insertCheckbox() }) { Text("□ Kvačica") }
-                    TextButton(onClick = { onClose(); vm.insertFolder() }) { Text("▼ Mapa") }
-                    TextButton(onClick = { onClose(); onLink() }) { Text("Poveznica") }
-                    TextButton(onClick = { onClose(); vm.insertTable() }) { Text("Tablica") }
-                    TextButton(onClick = { onClose(); onImage() }) { Text("Slika") }
-                    TextButton(onClick = { onClose(); vm.insertBox() }) { Text("Kutija") }
-                    TextButton(onClick = { onClose(); vm.insertDateTime() }) { Text("Datum i vrijeme") }
+                Row(traka) {
+                    Alat(Ikone.kvacica, "Kvačica") { onClose(); vm.insertCheckbox() }
+                    Alat(Ikone.mapa, "Mapa") { onClose(); vm.insertFolder() }
+                    Alat(Ikone.poveznica, "Poveznica") { onClose(); onLink() }
+                    Alat(Ikone.tablica, "Tablica") { onClose(); vm.insertTable() }
+                    Alat(Ikone.slika, "Slika") { onClose(); onImage() }
+                    Alat(Ikone.kutija, "Kutija") { onClose(); vm.insertBox() }
+                    Alat(Ikone.sat, "Vrijeme") { onClose(); vm.insertDateTime() }
                 }
             }
             enabled && vm.linkAtCursor != null -> {
                 val cilj = vm.linkAtCursor.orEmpty()
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = { onOpenLink(cilj) }, modifier = Modifier.weight(1f)) {
-                        Text("Otvori: $cilj", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onOpenLink(cilj) }
+                            .padding(horizontal = 8.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Ikone.otvori, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        Text(
+                            cilj,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 10.dp),
+                        )
                     }
-                    TextButton(onClick = vm::removeLink) { Text("Ukloni") }
+                    Radnja("Ukloni", onClick = vm::removeLink)
                 }
             }
         }
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(48.dp)
-                .padding(horizontal = 8.dp),
+                .height(52.dp)
+                .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BarButton("↶", "Poništi", enabled && vm.canUndo, vm::undo)
-            BarButton("↷", "Ponovi", enabled && vm.canRedo, vm::redo)
+            IkonaGumb(Ikone.ponisti, "Poništi", enabled && vm.canUndo, onClick = vm::undo)
+            IkonaGumb(Ikone.ponovi, "Ponovi", enabled && vm.canRedo, onClick = vm::redo)
             Spacer(Modifier.weight(1f))
-            BarButton(if (open) "×" else "+", if (open) "Zatvori funkcije" else "Funkcije", enabled, onToggle)
+            IkonaGumb(if (open) Ikone.zatvori else Ikone.plus, if (open) "Zatvori funkcije" else "Funkcije", enabled, onClick = onToggle)
         }
     }
 }
 
 @Composable
-private fun BarButton(symbol: String, description: String, enabled: Boolean, onClick: () -> Unit) {
-    IconButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.semantics { contentDescription = description },
-    ) {
-        Text(symbol, fontSize = 22.sp)
+private fun IkonaGumb(ikona: ImageVector, opis: String, enabled: Boolean = true, boja: Color = Color.Unspecified, onClick: () -> Unit) {
+    IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.semantics { contentDescription = opis }) {
+        val tint = when {
+            !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+            boja != Color.Unspecified -> boja
+            else -> MaterialTheme.colorScheme.onSurface
+        }
+        Icon(ikona, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -294,13 +369,16 @@ private fun FormatButton(
     Box(
         Modifier
             .size(44.dp)
+            .clip(CircleShape)
+            .background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent)
             .clickable(onClick = onClick)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
         Text(
             label,
-            fontSize = 15.sp,
+            fontSize = 16.sp,
+            fontFamily = PapirMono,
             fontWeight = if (bold || active) FontWeight.Bold else FontWeight.Normal,
             fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
             color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -393,17 +471,24 @@ private class StilPrikaz(
 /** Sukob: datoteka je promijenjena izvana dok su ovdje bile nespremljene izmjene. Odlučuje čovjek. */
 @Composable
 private fun ConflictBar(onKeepMine: () -> Unit, onLoadTheirs: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
         Text(
-            "Datoteka je u međuvremenu promijenjena izvan Papira. Ništa nije prepisano. " +
-                "Koju verziju zadržati u datoteci? Druga se sprema kao zasebna datoteka u mapi.",
-            style = MaterialTheme.typography.bodySmall,
+            "Datoteka je promijenjena izvan Papira.",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.error,
         )
+        Text(
+            "Ništa nije prepisano. Koju verziju zadržati? Druga ostaje kao zasebna datoteka u mapi.",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp),
+        )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = onLoadTheirs) { Text("Onu izvana") }
-            TextButton(onClick = onKeepMine) { Text("Ovu ovdje") }
+            Radnja("Onu izvana", onClick = onLoadTheirs)
+            Radnja("Ovu ovdje", naglaseno = true, onClick = onKeepMine)
         }
+        Crta()
     }
 }
 
@@ -416,15 +501,52 @@ private fun FolderPrompt(onChoose: () -> Unit) {
             .padding(horizontal = 32.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text("Gdje će živjeti tvoji papiri?", style = MaterialTheme.typography.titleLarge)
+        Text("Papir", fontFamily = PapirMono, fontSize = 34.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Text(
             "Svaki papir je obična datoteka u mapi koju izabereš. Biraš samo jednom.",
-            style = MaterialTheme.typography.bodyMedium,
+            fontSize = 16.sp,
+            lineHeight = 23.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
+            modifier = Modifier.padding(top = 14.dp, bottom = 18.dp),
         )
-        TextButton(onClick = onChoose) { Text("Odaberi mapu") }
+        Text(
+            "Odaberi mapu",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.primary)
+                .clickable(onClick = onChoose)
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+        )
     }
+}
+
+/** Jednoredno polje bez okvira, s tankom crtom ispod. */
+@Composable
+private fun Polje(
+    vrijednost: String,
+    onChange: (String) -> Unit,
+    natpis: String,
+    modifier: Modifier = Modifier,
+    fokus: FocusRequester? = null,
+) {
+    BasicTextField(
+        value = vrijednost,
+        onValueChange = onChange,
+        singleLine = true,
+        textStyle = TextStyle(fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+        modifier = modifier.let { if (fokus != null) it.focusRequester(fokus) else it },
+        decorationBox = { unutra ->
+            Box(Modifier.padding(vertical = 10.dp)) {
+                if (vrijednost.isEmpty()) Text(natpis, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                unutra()
+            }
+        },
+    )
 }
 
 /** Traži i zamijeni, kao u Notepadu (PAPIR.md, 5). */
@@ -432,50 +554,66 @@ private fun FolderPrompt(onChoose: () -> Unit) {
 private fun SearchBar(vm: PapirViewModel, onClose: () -> Unit) {
     var zamjena by remember { mutableStateOf("") }
     val fokus = remember { FocusRequester() }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = vm.searchQuery,
-                onValueChange = { vm.search(it) },
-                singleLine = true,
-                placeholder = { Text("Traži") },
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-                modifier = Modifier.weight(1f).focusRequester(fokus),
-            )
+            Icon(Ikone.trazi, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            Polje(vm.searchQuery, { vm.search(it) }, "Traži", Modifier.weight(1f).padding(start = 10.dp), fokus)
             Text(
                 if (vm.matches.isEmpty()) "0" else "${vm.currentMatch + 1}/${vm.matches.size}",
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.padding(horizontal = 6.dp),
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 4.dp),
             )
-            BarButton("↑", "Prethodno", vm.matches.isNotEmpty()) { vm.nextMatch(-1) }
-            BarButton("↓", "Sljedeće", vm.matches.isNotEmpty()) { vm.nextMatch(1) }
+            IkonaGumb(Ikone.gore, "Prethodno", vm.matches.isNotEmpty()) { vm.nextMatch(-1) }
+            IkonaGumb(Ikone.dolje, "Sljedeće", vm.matches.isNotEmpty()) { vm.nextMatch(1) }
+            IkonaGumb(Ikone.zatvori, "Zatvori traženje") { vm.endSearch(); onClose() }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = zamjena,
-                onValueChange = { zamjena = it },
-                singleLine = true,
-                placeholder = { Text("Zamijeni s") },
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-                modifier = Modifier.weight(1f),
-            )
+            Spacer(Modifier.width(30.dp))
+            Polje(zamjena, { zamjena = it }, "Zamijeni s", Modifier.weight(1f))
             FormatButton("Aa", "Velika i mala slova", vm.matchCase, { vm.search(vm.searchQuery, !vm.matchCase) })
-            TextButton(onClick = { vm.replaceCurrent(zamjena) }, enabled = !vm.readOnly && vm.matches.isNotEmpty()) { Text("Zamijeni") }
-            TextButton(onClick = { vm.replaceAll(zamjena) }, enabled = !vm.readOnly && vm.matches.isNotEmpty()) { Text("Sve") }
-            BarButton("×", "Zatvori traženje", true) { vm.endSearch(); onClose() }
+            Radnja("Zamijeni", !vm.readOnly && vm.matches.isNotEmpty()) { vm.replaceCurrent(zamjena) }
+            Radnja("Sve", !vm.readOnly && vm.matches.isNotEmpty()) { vm.replaceAll(zamjena) }
         }
+        Crta()
     }
     LaunchedEffect(Unit) { fokus.requestFocus() }
 }
 
+/** Font papira: JetBrains Mono NL, ugrađen u aplikaciju (fonts/README.md). */
+private val PapirMono = FontFamily(
+    Font(R.font.jetbrains_mono_regular, FontWeight.Normal, FontStyle.Normal),
+    Font(R.font.jetbrains_mono_italic, FontWeight.Normal, FontStyle.Italic),
+    Font(R.font.jetbrains_mono_bold, FontWeight.Bold, FontStyle.Normal),
+    Font(R.font.jetbrains_mono_bold_italic, FontWeight.Bold, FontStyle.Italic),
+)
+
+/** Jedan papir, jedna tinta: plavo-crna je jedina boja Papira. */
 @Composable
 private fun PapirTheme(content: @Composable () -> Unit) {
     val colors = if (isSystemInDarkTheme()) {
-        darkColorScheme(background = Color.Black, surface = Color.Black)
+        darkColorScheme(
+            primary = Color(0xFFA9BEDF), onPrimary = Color(0xFF121315),
+            background = Color(0xFF121315), surface = Color(0xFF121315),
+            onBackground = Color(0xFFE4E6EA), onSurface = Color(0xFFE4E6EA),
+            onSurfaceVariant = Color(0xFF8E949E), surfaceVariant = Color(0xFF1C1E22),
+            outline = Color(0xFF3A3F47), outlineVariant = Color(0xFF2A2D33),
+            error = Color(0xFFF2B8B5), surfaceContainer = Color(0xFF1C1E22),
+        )
     } else {
-        lightColorScheme(background = Color.White, surface = Color.White)
+        lightColorScheme(
+            primary = Color(0xFF1F2A3C), onPrimary = Color.White,
+            background = Color.White, surface = Color.White,
+            onBackground = Color(0xFF1B1E23), onSurface = Color(0xFF1B1E23),
+            onSurfaceVariant = Color(0xFF6B717C), surfaceVariant = Color(0xFFF3F4F6),
+            outline = Color(0xFFC9CDD4), outlineVariant = Color(0xFFE6E8EC),
+            error = Color(0xFFB3261E), surfaceContainer = Color(0xFFF7F8FA),
+        )
     }
-    MaterialTheme(colorScheme = colors, content = content)
+    MaterialTheme(colorScheme = colors) {
+        val odabir = TextSelectionColors(handleColor = colors.primary, backgroundColor = colors.primary.copy(alpha = 0.22f))
+        CompositionLocalProvider(LocalTextSelectionColors provides odabir, content = content)
+    }
 }
 
 @Composable
@@ -520,6 +658,7 @@ private fun PapirScreen(vm: PapirViewModel) {
     }
 
     val showPaper = vm.loaded && !vm.needsFolder
+    BackHandler(enabled = vm.browser != null) { vm.closeBrowser() }
 
     val tekst = vm.content.text
     val linije = remember(tekst) { tekst.split("\n") }
@@ -583,29 +722,27 @@ private fun PapirScreen(vm: PapirViewModel) {
             if (vm.loaded && vm.needsFolder) {
                 vm.message?.let { MessageLine(it) { vm.message = null } }
                 FolderPrompt { chooseFolder.launch(null) }
+            } else if (showPaper && vm.browser != null) {
+                BrowserScreen(vm)
             } else if (showPaper) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
-                        .padding(start = 20.dp),
+                        .height(52.dp)
+                        .padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    IkonaGumb(Ikone.papiri, "Papiri") { vm.openBrowser() }
                     Text(
-                        text = vm.title.orEmpty(),
-                        style = MaterialTheme.typography.labelLarge,
+                        text = vm.title ?: "novi papir",
+                        fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).padding(start = 4.dp),
                     )
                     Box {
-                        IconButton(
-                            onClick = { menuOpen = true },
-                            modifier = Modifier.semantics { contentDescription = "Izbornik" },
-                        ) {
-                            Text("⋯", fontSize = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
+                        IkonaGumb(Ikone.vise, "Izbornik", boja = MaterialTheme.colorScheme.onSurfaceVariant) { menuOpen = true }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                             DropdownMenuItem(
                                 text = { Text("Novi") },
@@ -774,16 +911,109 @@ private fun PapirScreen(vm: PapirViewModel) {
     }
 }
 
+/**
+ * Popis papira u mapi (PAPIR.md, 9): najnoviji gore, ime, prvi redak i vrijeme. Samo otvara;
+ * brisanje i premještanje radi upravitelj datoteka.
+ */
+@Composable
+private fun BrowserScreen(vm: PapirViewModel) {
+    var upit by remember { mutableStateOf("") }
+    val svi = vm.browser.orEmpty()
+    val vidljivi = remember(svi, upit) {
+        val q = upit.trim()
+        if (q.isEmpty()) svi else svi.filter { it.ime.contains(q, ignoreCase = true) || it.tekst.contains(q, ignoreCase = true) }
+    }
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IkonaGumb(Ikone.natrag, "Natrag") { vm.closeBrowser() }
+            Text("Papiri", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            IkonaGumb(Ikone.plus, "Novi papir") { vm.newFromBrowser() }
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Ikone.trazi, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+            Polje(upit, { upit = it }, "Traži po imenu ili tekstu", Modifier.weight(1f).padding(start = 10.dp))
+        }
+        Crta()
+        when {
+            vm.browserLoading -> Text("Čitam mapu…", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(20.dp))
+            vidljivi.isEmpty() -> Text(
+                if (upit.isBlank()) "U mapi još nema papira. Novi papir postaje datoteka čim dobije prvo slovo." else "Ništa ne odgovara traženju.",
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(20.dp),
+            )
+            else -> LazyColumn(Modifier.fillMaxSize()) {
+                items(vidljivi, key = { it.uri.toString() }) { u ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { vm.openFromBrowser(u.uri) }
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                u.ime,
+                                fontSize = 16.sp,
+                                color = if (u.jePapir) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            val prvi = u.prviRed
+                            if (!prvi.isNullOrEmpty()) {
+                                Text(prvi, fontSize = 13.sp, fontFamily = PapirMono, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                            }
+                        }
+                        Text(vrijeme(u.izmijenjeno), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Kad je datoteka mijenjana: danas sat, ove godine dan i mjesec, inače i godina. */
+private fun vrijeme(ms: Long): String {
+    if (ms <= 0L) return ""
+    val t = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault())
+    val sada = java.time.ZonedDateTime.now()
+    val f = when {
+        t.toLocalDate() == sada.toLocalDate() -> "HH:mm"
+        t.year == sada.year -> "d. M."
+        else -> "d. M. yyyy."
+    }
+    return t.format(java.time.format.DateTimeFormatter.ofPattern(f))
+}
+
+/** Greška ostaje dok je ne dodirneš; obična obavijest je siva i sama nestane. */
+private fun jeGreska(t: String): Boolean =
+    listOf("nije uspjel", "nije moguće", "ne može", "Ne može", "ne smije", "nije UTF-8", "nije papir", "nije pronađen",
+        "Odaberi mapu", "Tu je tekst", "Nijedna aplikacija", "ne mogu").any { it in t }
+
 @Composable
 private fun MessageLine(text: String, onDismiss: () -> Unit) {
+    val greska = jeGreska(text)
+    if (!greska) {
+        LaunchedEffect(text) {
+            kotlinx.coroutines.delay(4000)
+            onDismiss()
+        }
+    }
     Text(
         text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.error,
+        fontSize = 14.sp,
+        lineHeight = 19.sp,
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+        color = if (greska) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onDismiss)
-            .padding(horizontal = 20.dp, vertical = 8.dp),
+            .padding(horizontal = 20.dp, vertical = 6.dp),
     )
 }
 
@@ -794,8 +1024,8 @@ private val sredinaRetka = LineHeightStyle(LineHeightStyle.Alignment.Center, Lin
 
 @Composable
 private fun papirStil(): TextStyle = TextStyle(
-    fontFamily = FontFamily.Monospace,
-    fontSize = 17.sp,
+    fontFamily = PapirMono,
+    fontSize = 16.sp,
     // obični retci iste visine, kao u Notepadu; naslov je jedan redak svoje veličine
     lineHeight = RED.sp,
     lineHeightStyle = sredinaRetka,
@@ -995,7 +1225,7 @@ private fun Objects(vm: PapirViewModel, polozaji: Polozaji, znak: Float, density
                 Modifier
                     .offset { IntOffset(x.roundToInt(), gore.first.roundToInt()) }
                     .size(with(density) { w.toDp() }, with(density) { h.toDp() })
-                    .border(if (izabran) 3.dp else 2.dp, if (izabran) izabranaBoja else linija),
+                    .border(if (izabran) 1.5.dp else 1.dp, if (izabran) izabranaBoja else linija),
             ) {
                 when (o.vrsta) {
                     Objekt.Vrsta.SLIKA -> ImageObject(vm, o)
@@ -1020,7 +1250,7 @@ private fun Objects(vm: PapirViewModel, polozaji: Polozaji, znak: Float, density
                 .offset { IntOffset((g.stupac * znak).roundToInt(), y.roundToInt()) }
                 .size(with(density) { (g.sirina * znak).toDp() }, with(density) { h.toDp() })
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.85f))
-                .border(3.dp, boja),
+                .border(1.5.dp, boja),
         ) {
             if (g.vrsta == Objekt.Vrsta.SLIKA) ImageObject(vm, g, odabir = false)
             Text(

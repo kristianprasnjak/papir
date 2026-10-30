@@ -216,9 +216,10 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     init {
         folder = prefs.getString(KEY_FOLDER, null)?.let(Uri::parse)?.takeIf(::hasPersistedWrite)
         hasFolder = folder != null
+        // Dodir ikone: uvijek prazan papir (MANIFEST.md, 5). Zadnji papir vraća se samo kad je
+        // sustav sam ugasio aplikaciju u pozadini (onRecreated).
         op {
-            val last = prefs.getString(KEY_TARGET, null)?.let(Uri::parse)
-            if (last == null || !load(last)) startEmpty()
+            startEmpty(remember = false)
             moveLegacyDraft()
             loaded = true
         }
@@ -1139,12 +1140,116 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Prazan papir. Datoteka nastaje tek s prvim slovom, da se ne gomilaju prazne datoteke. */
-    private fun startEmpty() {
+    private fun startEmpty(remember: Boolean = true) {
         resetTo(TextFieldValue(""))
         target = null
         title = null
         canRename = false
-        prefs.edit().remove(KEY_TARGET).apply()
+        if (remember) prefs.edit().remove(KEY_TARGET).apply()
+    }
+
+    private var activityChecked = false
+
+    /**
+     * Zove ekran kad nastane. Ako ga je sustav ponovno stvorio nakon što je ugasio aplikaciju u
+     * pozadini, vraća se papir na kojem je čovjek bio; inače ostaje prazan papir.
+     */
+    fun onActivityCreated(recreated: Boolean) {
+        if (activityChecked) return
+        activityChecked = true
+        if (!recreated) return
+        op {
+            if (target != null || content.text.isNotEmpty()) return@op
+            val last = prefs.getString(KEY_TARGET, null)?.let(Uri::parse) ?: return@op
+            load(last)
+        }
+    }
+
+    // --- Popis papira (PAPIR.md, 9) ---
+
+    /** Jedna datoteka u mapi za papire. */
+    class Unos(
+        val uri: Uri,
+        val ime: String,
+        val izmijenjeno: Long,
+        /** Prvi neprazan redak teksta (bez oznaka); null ako datoteka nije tekst. */
+        val prviRed: String?,
+        /** Tekst za traženje (najviše prvih 64 KB). */
+        val tekst: String,
+        val jePapir: Boolean,
+    )
+
+    /** Otvoren popis papira; null kad je zatvoren, prazna lista dok se učitava. */
+    var browser by mutableStateOf<List<Unos>?>(null)
+        private set
+    var browserLoading by mutableStateOf(false)
+        private set
+
+    fun openBrowser() {
+        browser = emptyList()
+        browserLoading = true
+        op {
+            saveLocked()
+            val dir = folder
+            browser = if (dir == null) emptyList() else io { listFolder(dir) }
+            browserLoading = false
+        }
+    }
+
+    fun closeBrowser() {
+        browser = null
+    }
+
+    fun openFromBrowser(uri: Uri) {
+        browser = null
+        open(uri, fromPicker = false)
+    }
+
+    fun newFromBrowser() {
+        browser = null
+        newPaper()
+    }
+
+    private fun listFolder(tree: Uri): List<Unos> {
+        val out = ArrayList<Unos>()
+        try {
+            val djeca = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+            val stupci = arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+                DocumentsContract.Document.COLUMN_SIZE,
+                DocumentsContract.Document.COLUMN_MIME_TYPE,
+            )
+            resolver.query(djeca, stupci, null, null, null)?.use { c ->
+                while (c.moveToNext()) {
+                    val mime = c.getString(4).orEmpty()
+                    if (mime == DocumentsContract.Document.MIME_TYPE_DIR) continue
+                    val ime = c.getString(1) ?: continue
+                    val uri = DocumentsContract.buildDocumentUriUsingTree(tree, c.getString(0))
+                    val velicina = if (c.isNull(3)) 0L else c.getLong(3)
+                    val nastavak = ime.substringAfterLast('.', "").lowercase()
+                    val tekstni = nastavak in TEXT_EXTENSIONS || mime.startsWith("text/")
+                    var prvi: String? = null
+                    var tekst = ""
+                    if ((tekstni || nastavak == "pzp") && velicina <= 2_000_000) {
+                        val bajtovi = read(uri)
+                        if (bajtovi != null) {
+                            val paket = if (Paket.jePaket(bajtovi)) Paket.citaj(bajtovi) else null
+                            PapirFile.decode(paket?.tekst ?: bajtovi)?.text?.let { t ->
+                                val cisto = Oblik.citaj(t).tekst
+                                tekst = cisto.take(65_536)
+                                prvi = cisto.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
+                            }
+                        }
+                    }
+                    out.add(Unos(uri, ime, if (c.isNull(2)) 0L else c.getLong(2), prvi, tekst, prvi != null))
+                }
+            }
+        } catch (e: Exception) {
+            message = "Mapu za papire nije moguće pročitati."
+        }
+        return out.sortedByDescending { it.izmijenjeno }
     }
 
     /**
@@ -1443,5 +1548,6 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         const val KEY_TARGET = "target"
         const val KEY_FOLDER = "folder"
+        val TEXT_EXTENSIONS = setOf("pap", "txt", "md", "html", "htm", "csv", "json", "xml", "log", "ini", "cfg")
     }
 }

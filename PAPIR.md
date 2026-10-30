@@ -40,6 +40,7 @@ Ustav je iznad svakog zahtjeva za funkcijom. Ako se funkcija ne može napraviti 
 ## 3. Papiri i mapa
 
 - **Mapa za papire** bira se jednom, pri prvom pokretanju. Svi papiri su obične datoteke u njoj.
+- **Dodir ikone uvijek otvara prazan papir**, s kursorom i tipkovnicom (manifest, 5). Datoteka otvorena iz druge aplikacije otvara tu datoteku. Povratak u Papir dok je otvoren ostavlja papir na kojem si bio; ako ga je sustav u međuvremenu ugasio, vraća se taj isti papir.
 - **Novi papir** postaje datoteka `Note.pap` čim dobije prvo slovo. Ako ime postoji, Android sam dodaje broj: `Note (1).pap`, `Note (2).pap`…
 - **Nastavak `.pap` je preporuka, ne obveza.** Ime se može promijeniti u bilo kojem trenutku (**Preimenuj…**, **Spremi kao…**) u bilo što, uključujući `.txt`, `.html` ili `.random`; papir ostaje papir zbog ključa, a ne zbog nastavka.
 - **Otvori…** otvara bilo koju tekstnu datoteku. Datoteka bez ključa je goli tekst i ostaje goli tekst dok korisnik izričito ne doda funkciju.
@@ -104,3 +105,24 @@ Ustav je iznad svakog zahtjeva za funkcijom. Ako se funkcija ne može napraviti 
 | Kutija teksta | okvir ╒═╕ | 0.9 |
 
 Odbijeno: štoperica (ne pripada bilježnici), veličine S i XS (izbačene u 0.9), povlačenje zidova tablice i oznaka prijeloma (0.8). Datum i vrijeme ostaje dok vlasnik ne odluči drugačije.
+
+---
+
+## 9. Popis papira
+
+- Ikona u gornjem lijevom kutu otvara **popis papira** iz mape: najnoviji gore, a za svaki ime, prvi redak teksta i kad je mijenjan. Bez sličica i bez kartica.
+- Vide se i ostale datoteke u mapi; one koje nisu tekst prikazane su sivo, ali se smiju otvoriti.
+- Traži se po imenu i po tekstu.
+- Popis samo otvara. Brisanje, premještanje i mape unutar mape radi upravitelj datoteka.
+
+---
+
+## 10. Izgled
+
+- **Jedan papir, jedna tinta.** Bijela podloga (u tamnoj temi tamna) i jedna boja tinte, plavo-crna, za kursor, odabir, poveznice i aktivne gumbe. Crveno samo za greške i sukob.
+- **Font papira** je JetBrains Mono NL, ugrađen u aplikaciju: jednake širine, bez ligatura, sa svim znakovima formata (`fonts/README.md`). Sučelje koristi sistemski font.
+- **Ikone** su tanke, iste debljine, nacrtane za Papir; ne koriste se znakovi iz fonta kao ikone.
+- **Funkcije** su jedna vodoravna traka ikona s kratkim natpisima iznad tipkovnice.
+- **Obavijesti** su sive, kratke i same nestanu; greške ostaju dok ih ne dodirneš.
+- **Sve crte** (tablice, slike, kutije, razdjelnice) iste su tanke debljine.
+
