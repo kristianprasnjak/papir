@@ -6,6 +6,10 @@ Zašto i kako: [MANIFEST.md](MANIFEST.md), pet točaka.
 
 Ispod površine: tvoj tekst je obična datoteka koju sam imenuješ i koja se zauvijek otvara u bilo kojem programu za tekst, uključujući stari Windows Notepad. Format je otvoren i opisan u [STANDARD.md](STANDARD.md); aplikacija u [PAPIR.md](PAPIR.md).
 
+## Verzija 0.10.1
+
+- dodir ikone otvara prazan papir i nakon nadogradnje ili kad je Android ugasio aplikaciju u pozadini; zadnji papir vraća samo povratak preko nedavnih aplikacija
+
 ## Verzija 0.10: prazan papir, popis papira, novi izgled
 
 - **dodir ikone uvijek otvara prazan papir**; zadnji papir vraća se samo ako ga je sustav ugasio dok si bio u drugoj aplikaciji
