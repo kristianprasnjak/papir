@@ -193,6 +193,20 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
     /** Bajtovi kakvi su na disku zadnji put pročitani ili zapisani (null: nema s čim usporediti). */
     private var diskBytes: ByteArray? = null
 
+    /**
+     * Verzije koje je ova aplikacija sama zapisala u ovu datoteku (i prazna datoteka odmah nakon
+     * stvaranja). Neki sustavi i oblaci kratko vraćaju stariju verziju nakon zapisa; to nije
+     * promjena izvana i ne smije izazvati sukob. Sve ostalo jest.
+     */
+    private val ownVersions = ArrayDeque<ByteArray>()
+
+    private fun rememberOwn(b: ByteArray) {
+        ownVersions.addLast(b)
+        while (ownVersions.size > 6) ownVersions.removeFirst()
+    }
+
+    private fun isOwn(b: ByteArray): Boolean = ownVersions.any { it.contentEquals(b) }
+
     /** Verzija nađena na disku u trenutku sukoba. */
     private var theirs: ByteArray? = null
 
@@ -948,7 +962,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         val known = diskBytes ?: return@op
         if (dirty || conflict || readOnly) return@op
         val onDisk = io { read(uri) } ?: return@op
-        if (onDisk.contentEquals(known)) return@op
+        if (onDisk.contentEquals(known) || isOwn(onDisk)) return@op
         povratak.prijeIzmjene(stanje(), SystemClock.uptimeMillis(), false)
         applyBytes(onDisk, keepCursor = true)
         readOnly = notText || !io { canWrite(uri) }
@@ -1015,6 +1029,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         persist(uri)
         target = uri
         diskBytes = null // nova datoteka: nema starije verzije s kojom bi bila u sukobu
+        ownVersions.clear()
         theirs = null
         conflict = false
         readOnly = false
@@ -1118,6 +1133,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         conflict = false
         theirs = null
         diskBytes = null
+        ownVersions.clear()
         povratak.ocisti()
         refreshUndo()
     }
@@ -1162,6 +1178,8 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
             // datoteku još dovršava ne izazove lažni sukob.
             resetTo(TextFieldValue(""))
             applyBytes(bytes, keepCursor = false)
+            rememberOwn(ByteArray(0))
+            rememberOwn(bytes)
             target = created
             title = io { displayName(created) }
             canRename = io { supportsRename(created) }
@@ -1226,6 +1244,8 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
             } else {
                 val r = io { attempt { writeUri(created, bytes) } }
                 if (r == Ishod.OK) {
+                    ownVersions.clear()
+                    rememberOwn(ByteArray(0))
                     target = created
                     title = io { displayName(created) }
                     canRename = io { supportsRename(created) }
@@ -1237,7 +1257,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
             io {
                 val known = diskBytes
                 val onDisk = if (known != null) read(uri) else null
-                if (known != null && onDisk != null && !onDisk.contentEquals(known)) {
+                if (known != null && onDisk != null && !onDisk.contentEquals(known) && !isOwn(onDisk)) {
                     theirs = onDisk
                     Ishod.SUKOB
                 } else {
@@ -1249,6 +1269,7 @@ class PapirViewModel(app: Application) : AndroidViewModel(app) {
         when (ishod) {
             Ishod.OK -> {
                 diskBytes = bytes
+                rememberOwn(bytes)
                 if (text == snapshot) dirty = false
                 if (convertToPackage) renameToPackage()
             }
