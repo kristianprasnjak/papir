@@ -16,16 +16,19 @@ object Mape {
     /** Uvlaka: broj razmaka na početku retka. */
     fun uvlaka(redak: String): Int = redak.length - redak.trimStart(' ').length
 
-    /** Redak je kvačica: uvlaka, □ ili ■, razmak. */
+    /** Iza znaka je razmak ili kraj retka (prazna kvačica ili mapa bez imena). */
+    private fun razmakIliKraj(redak: String, i: Int): Boolean = i == redak.length || redak[i] == ' '
+
+    /** Redak je kvačica: uvlaka, □ ili ■, pa razmak ili kraj retka. */
     fun jeKvacica(redak: String): Boolean {
         val u = uvlaka(redak)
-        return redak.length > u + 1 && (redak[u] == PRAZNO || redak[u] == OZNACENO) && redak[u + 1] == ' '
+        return redak.length > u && (redak[u] == PRAZNO || redak[u] == OZNACENO) && razmakIliKraj(redak, u + 1)
     }
 
-    /** Zaglavlje mape: (uvlaka, otvorena) ili null. Uvlaka, ► ili ▼, razmak. */
+    /** Zaglavlje mape: (uvlaka, otvorena) ili null. Uvlaka, ► ili ▼, pa razmak ili kraj retka. */
     fun zaglavlje(redak: String): Pair<Int, Boolean>? {
         val u = uvlaka(redak)
-        if (redak.length <= u + 1 || redak[u + 1] != ' ') return null
+        if (redak.length <= u || !razmakIliKraj(redak, u + 1)) return null
         return when (redak[u]) {
             ZATVORENO -> u to false
             OTVORENO -> u to true

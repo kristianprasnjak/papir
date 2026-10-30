@@ -841,6 +841,21 @@ private fun Paper(
 
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val sirinaEkrana = maxWidth
+        val sirinaPx = with(density) { maxWidth.toPx() }
+        val visinaPx = with(density) { maxHeight.toPx() }
+        // obris koji se pomiče ili širi ostaje na ekranu
+        LaunchedEffect(vm.ghost) {
+            val g = vm.ghost ?: return@LaunchedEffect
+            val padding = with(density) { 20.dp.toPx() }
+            val desno = padding + (g.zadnjiStupac + 2) * znak
+            val lijevo = padding + (g.stupac - 1) * znak
+            if (desno > hScroll.value + sirinaPx) hScroll.animateScrollTo((desno - sirinaPx).roundToInt())
+            else if (lijevo < hScroll.value) hScroll.animateScrollTo(lijevo.roundToInt().coerceAtLeast(0))
+            val linija = vm.lineOfRawRow(g.zadnjiRedak)
+            polozaji[linija]?.let { (_, dno) ->
+                if (dno + padding > vScroll.value + visinaPx) vScroll.animateScrollTo((dno + padding - visinaPx).roundToInt())
+            }
+        }
         Box(
             Modifier
                 .fillMaxSize()
@@ -955,17 +970,34 @@ private fun Objects(vm: PapirViewModel, polozaji: Polozaji, znak: Float, density
         // ispod kraja teksta: nastavlja se mreža redaka iste visine
         val y = gore?.first ?: ((polozaji.values.maxOfOrNull { it.second } ?: 0f) + (g.redak - vm.rawRowOfLine(Int.MAX_VALUE)) * visinaRetka)
         val h = if (gore != null && dolje != null) dolje.second - gore.first else g.visina * visinaRetka
+        val slobodno = vm.ghostFree
+        val boja = if (slobodno) izabranaBoja else MaterialTheme.colorScheme.error
+        // novi položaj ili veličina, sa slikom unutra, da se vidi kako će izgledati
         Box(
             Modifier
                 .offset { IntOffset((g.stupac * znak).roundToInt(), y.roundToInt()) }
                 .size(with(density) { (g.sirina * znak).toDp() }, with(density) { h.toDp() })
-                .border(3.dp, if (vm.ghostFree) izabranaBoja else MaterialTheme.colorScheme.error),
-        )
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.85f))
+                .border(3.dp, boja),
+        ) {
+            if (g.vrsta == Objekt.Vrsta.SLIKA) ImageObject(vm, g, odabir = false)
+            Text(
+                "${g.sirina} × ${g.visina}" + when {
+                    !slobodno -> " · tu je tekst"
+                    vm.ghostMode == PapirViewModel.GhostMode.SIZE && g.vrsta == Objekt.Vrsta.SLIKA &&
+                        g.sirina <= g.sadrzaj.codePointCount(0, g.sadrzaj.length) + 4 -> " · uže ne može dok ime ne stane (Preimenuj)"
+                    else -> ""
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.background,
+                modifier = Modifier.align(Alignment.TopStart).background(boja).padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+        }
     }
 }
 
 @Composable
-private fun ImageObject(vm: PapirViewModel, o: Objekt) {
+private fun ImageObject(vm: PapirViewModel, o: Objekt, odabir: Boolean = true) {
     val bajtovi = vm.attachments[o.sadrzaj]
     val slika = remember(o.sadrzaj, bajtovi) {
         bajtovi?.let { b ->
@@ -983,7 +1015,7 @@ private fun ImageObject(vm: PapirViewModel, o: Objekt) {
     Box(
         Modifier
             .fillMaxSize()
-            .clickable { vm.select(o) },
+            .let { if (odabir) it.clickable { vm.select(o) } else it },
         contentAlignment = Alignment.Center,
     ) {
         if (slika != null) {

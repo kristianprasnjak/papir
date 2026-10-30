@@ -26,7 +26,9 @@ class MapeTest {
         assertEquals(0 to true, Mape.zaglavlje("▼ Kupovina"))
         assertEquals(2 to false, Mape.zaglavlje("  ► Pekara"))
         assertNull(Mape.zaglavlje("►Pekara"))
-        assertNull(Mape.zaglavlje("►"))
+        // znak na kraju retka (npr. razmak iza njega pojeo je kraj retka uz sliku) je i dalje mapa
+        assertEquals(0 to false, Mape.zaglavlje("►"))
+        assertTrue(Mape.jeKvacica("  □"))
         assertTrue(Mape.jeKvacica("□ kruh"))
         assertTrue(Mape.jeKvacica("    ■ mlijeko"))
         assertTrue(!Mape.jeKvacica("□kruh"))
