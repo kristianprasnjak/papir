@@ -337,10 +337,10 @@ private fun BottomBar(
                 .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IkonaGumb(Ikone.ponisti, "Poništi", enabled && vm.canUndo, vm::undo)
-            IkonaGumb(Ikone.ponovi, "Ponovi", enabled && vm.canRedo, vm::redo)
+            IkonaGumb(Ikone.ponisti, "Poništi", enabled && vm.canUndo, onClick = vm::undo)
+            IkonaGumb(Ikone.ponovi, "Ponovi", enabled && vm.canRedo, onClick = vm::redo)
             Spacer(Modifier.weight(1f))
-            IkonaGumb(if (open) Ikone.zatvori else Ikone.plus, if (open) "Zatvori funkcije" else "Funkcije", enabled, onToggle)
+            IkonaGumb(if (open) Ikone.zatvori else Ikone.plus, if (open) "Zatvori funkcije" else "Funkcije", enabled, onClick = onToggle)
         }
     }
 }
