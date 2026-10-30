@@ -139,10 +139,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        // Zadnji papir vraća se samo povratkom preko nedavnih aplikacija; dodir ikone je uvijek prazan papir,
-        // i kad Android vrati staru karticu aplikacije (nakon nadogradnje ili gašenja u pozadini).
-        val izNedavnih = (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
-        vm.onActivityCreated(recreated = savedInstanceState != null && izNedavnih)
         if (savedInstanceState == null) handleIntent(intent)
         setContent { PapirTheme { PapirScreen(vm) } }
     }
