@@ -20,9 +20,13 @@ Ovo je predaja za novi razgovor. Pravila su u [MANIFEST.md](MANIFEST.md), [STAND
 
 ## Otvorena pitanja za vlasnika
 
-- stalna poveznica na najnoviju verziju (traži da izdanja više ne budu „prerelease" na GitHubu)
-- je li mapa za papire u oblaku (Drive) ili na mobitelu, ako se sukob ponovi
 - „▼kgll" bez razmaka na jednoj slici: je li vlasnik sam obrisao razmak ili Papir negdje gubi razmak
+
+## Odgovoreno (vlasnik, 1. 11. 2026.)
+
+- izdanja ostaju „prerelease" još nekoliko mjeseci razvoja
+- mapa za papire je gdje god je korisnik postavi (mobitel ili oblak); Papir ne smije pretpostaviti ni jedno ni drugo
+- tablice trebaju biti ljepše (sljedeći posao, sučelje)
 
 ## Poznata ograničenja
 
